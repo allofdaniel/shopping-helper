@@ -1,0 +1,22 @@
+# 꿀템장바구니 크롤러 의존성
+# YouTube
+google-api-python-client>=2.0.0
+youtube-transcript-api==0.6.1
+
+# AI (Gemini)
+google-generativeai>=0.3.0
+
+# 환경설정
+python-dotenv>=1.0.0
+
+# HTTP
+requests>=2.31.0
+
+# 진행바
+tqdm>=4.65.0
+
+# AWS S3
+boto3>=1.28.0
+
+# 올리브영 크롤러 (선택사항)
+# playwright>=1.40.0

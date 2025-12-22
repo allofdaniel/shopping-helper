@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  shopping-helper-crawler:
+    container_name: shopping-helper-crawler
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Seoul
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=ap-northeast-2
+      - S3_BUCKET=notam-korea-data
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/data/logs
+    # 6시간마다 실행 (cron 대신 entrypoint에서 처리)
+    # 또는 NAS 작업 스케줄러 사용
+    command: >
+      sh -c "while true; do
+        echo '[$(date)] Starting crawler...';
+        python crawler/scheduler.py --force --max-videos 30;
+        python crawler/s3_uploader.py;
+        echo '[$(date)] Sleeping 6 hours...';
+        sleep 21600;
+      done"
+
+networks:
+  default:
+    name: shopping-helper-network

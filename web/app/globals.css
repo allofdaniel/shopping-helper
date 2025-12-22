@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255;
+  --background-end-rgb: 245, 245, 245;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 17, 17, 17;
+    --background-end-rgb: 28, 28, 28;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Store brand colors */
+.store-daiso { --store-color: #FF6B35; }
+.store-costco { --store-color: #E31837; }
+.store-traders { --store-color: #004D9B; }
+.store-ikea { --store-color: #0051BA; }
+.store-oliveyoung { --store-color: #009A3D; }
+.store-coupang { --store-color: #E4002B; }
+.store-convenience { --store-color: #FFA500; }
+
+.store-badge {
+  background-color: var(--store-color);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}

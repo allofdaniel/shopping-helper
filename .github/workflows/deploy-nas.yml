@@ -1,0 +1,104 @@
+# NAS 자동 배포 워크플로우
+# main 브랜치에 push되면 자동으로 Synology NAS에 배포
+
+name: Deploy to NAS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/offline-shopping-helper/**'
+  workflow_dispatch:  # 수동 실행 가능
+
+env:
+  CONTAINER_NAME: shopping-helper-crawler
+  NAS_DOCKER_PATH: /volume1/docker/shopping-helper
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.NAS_SSH_PRIVATE_KEY }}" > ~/.ssh/nas_key
+          chmod 600 ~/.ssh/nas_key
+          ssh-keyscan -H ${{ secrets.NAS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Create .env file for NAS
+        run: |
+          cat > .env << EOF
+          YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION=ap-northeast-2
+          S3_BUCKET=notam-korea-data
+          EOF
+
+      - name: Upload files to NAS
+        run: |
+          # 디렉토리 생성
+          ssh -i ~/.ssh/nas_key -o StrictHostKeyChecking=no \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} \
+            "mkdir -p $NAS_DOCKER_PATH/crawler $NAS_DOCKER_PATH/data $NAS_DOCKER_PATH/logs"
+
+          # crawler 폴더 업로드
+          scp -i ~/.ssh/nas_key -o StrictHostKeyChecking=no -r \
+            apps/offline-shopping-helper/crawler/* \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }}:$NAS_DOCKER_PATH/crawler/
+
+          # Docker 파일 업로드
+          scp -i ~/.ssh/nas_key -o StrictHostKeyChecking=no \
+            apps/offline-shopping-helper/docker/Dockerfile \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }}:$NAS_DOCKER_PATH/
+
+          # requirements.txt 업로드
+          scp -i ~/.ssh/nas_key -o StrictHostKeyChecking=no \
+            apps/offline-shopping-helper/requirements.txt \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }}:$NAS_DOCKER_PATH/
+
+          # .env 업로드
+          scp -i ~/.ssh/nas_key -o StrictHostKeyChecking=no \
+            .env \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }}:$NAS_DOCKER_PATH/
+
+      - name: Build and restart container
+        run: |
+          ssh -i ~/.ssh/nas_key -o StrictHostKeyChecking=no \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} << 'ENDSSH'
+
+          cd /volume1/docker/shopping-helper
+
+          # 컨테이너 중지
+          /usr/local/bin/docker stop shopping-helper-crawler 2>/dev/null || true
+          /usr/local/bin/docker rm shopping-helper-crawler 2>/dev/null || true
+
+          # 이미지 빌드
+          /usr/local/bin/docker build -t shopping-helper .
+
+          # 컨테이너 실행
+          /usr/local/bin/docker run -d \
+            --name shopping-helper-crawler \
+            --restart unless-stopped \
+            -e TZ=Asia/Seoul \
+            --env-file .env \
+            -v /volume1/docker/shopping-helper/data:/app/data \
+            -v /volume1/docker/shopping-helper/logs:/app/data/logs \
+            shopping-helper
+
+          # 상태 확인
+          sleep 5
+          /usr/local/bin/docker ps --filter name=shopping-helper-crawler
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/nas_key -o StrictHostKeyChecking=no \
+            ${{ secrets.NAS_USER }}@${{ secrets.NAS_HOST }} \
+            "/usr/local/bin/docker logs shopping-helper-crawler 2>&1 | tail -20"
