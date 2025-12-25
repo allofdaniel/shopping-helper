@@ -123,12 +123,21 @@ class Database:
             )
         """)
 
-        # 인덱스 생성
+        # 인덱스 생성 (기존)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_store ON products(store_key)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_approved ON products(is_approved)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daiso_catalog_name ON daiso_catalog(name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_daiso_catalog_category ON daiso_catalog(category_large, category_middle)")
+
+        # 추가 인덱스 (성능 최적화)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_video_id ON products(video_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_store_approved ON products(store_key, is_approved)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_view_count ON products(source_view_count DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_channel_id ON videos(channel_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_store_key ON videos(store_key)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_published_at ON videos(published_at)")
 
         self.conn.commit()
 

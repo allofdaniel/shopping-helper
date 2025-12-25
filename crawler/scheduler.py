@@ -7,6 +7,7 @@ YouTube 영상 수집 및 상품 추출을 자동으로 실행합니다.
 1. 직접 실행: python scheduler.py
 2. Windows 작업 스케줄러 등록
 3. Linux cron 등록
+4. 데몬 모드: python scheduler.py --daemon
 """
 import os
 import sys
@@ -22,6 +23,37 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from config import CRAWL_CONFIG, STORE_CATEGORIES, DATA_DIR
 from pipeline import DataPipeline
+
+# 선택적 임포트 - 없으면 스킵
+try:
+    from costco_catalog_crawler import run_costco_catalog
+    HAS_COSTCO = True
+except ImportError:
+    HAS_COSTCO = False
+
+try:
+    from ikea_catalog_crawler import run_ikea_catalog
+    HAS_IKEA = True
+except ImportError:
+    HAS_IKEA = False
+
+try:
+    from daiso_catalog_crawler import run_catalog_crawl as run_daiso_catalog
+    HAS_DAISO = True
+except ImportError:
+    HAS_DAISO = False
+
+try:
+    from smart_extractor import run_smart_extraction
+    HAS_SMART_EXTRACTOR = True
+except ImportError:
+    HAS_SMART_EXTRACTOR = False
+
+try:
+    from s3_uploader import S3Uploader
+    HAS_S3 = True
+except ImportError:
+    HAS_S3 = False
 
 
 # 로깅 설정
@@ -76,13 +108,84 @@ class Scheduler:
 
         return datetime.now() >= next_run
 
-    def run_collection(self, store_keys: list = None, max_videos: int = 30):
+    def update_catalogs(self):
+        """모든 스토어 카탈로그 업데이트"""
+        logger.info("=== 카탈로그 업데이트 시작 ===")
+        catalog_results = {}
+
+        if HAS_DAISO:
+            try:
+                logger.info("[다이소] 카탈로그 수집...")
+                count = run_daiso_catalog()
+                catalog_results['daiso'] = count
+                logger.info(f"[다이소] {count}개 완료")
+            except Exception as e:
+                logger.error(f"[다이소] 카탈로그 오류: {e}")
+
+        if HAS_COSTCO:
+            try:
+                logger.info("[코스트코] 카탈로그 수집...")
+                count = run_costco_catalog()
+                catalog_results['costco'] = count
+                logger.info(f"[코스트코] {count}개 완료")
+            except Exception as e:
+                logger.error(f"[코스트코] 카탈로그 오류: {e}")
+
+        if HAS_IKEA:
+            try:
+                logger.info("[이케아] 카탈로그 수집...")
+                count = run_ikea_catalog()
+                catalog_results['ikea'] = count
+                logger.info(f"[이케아] {count}개 완료")
+            except Exception as e:
+                logger.error(f"[이케아] 카탈로그 오류: {e}")
+
+        logger.info(f"=== 카탈로그 업데이트 완료: {catalog_results} ===")
+        return catalog_results
+
+    def run_smart_extraction(self):
+        """스마트 상품 추출 실행"""
+        if not HAS_SMART_EXTRACTOR:
+            logger.warning("smart_extractor 모듈 없음, 스킵")
+            return 0
+
+        logger.info("=== 스마트 상품 추출 시작 ===")
+        try:
+            count = run_smart_extraction()
+            logger.info(f"=== 스마트 추출 완료: {count}개 상품 ===")
+            return count
+        except Exception as e:
+            logger.error(f"스마트 추출 오류: {e}")
+            return 0
+
+    def upload_to_s3(self):
+        """S3 업로드"""
+        if not HAS_S3:
+            logger.warning("s3_uploader 모듈 없음, 스킵")
+            return None
+
+        logger.info("=== S3 업로드 시작 ===")
+        try:
+            uploader = S3Uploader()
+            results = uploader.upload_all()
+            logger.info(f"=== S3 업로드 완료 ===")
+            return results
+        except Exception as e:
+            logger.error(f"S3 업로드 오류: {e}")
+            return None
+
+    def run_collection(self, store_keys: list = None, max_videos: int = 30,
+                       update_catalog: bool = True, extract_products: bool = True,
+                       upload_s3: bool = True):
         """
         수집 실행
 
         Args:
             store_keys: 수집할 매장 키 리스트 (None이면 전체)
             max_videos: 매장당 최대 영상 수
+            update_catalog: 카탈로그 업데이트 여부
+            extract_products: 상품 추출 여부
+            upload_s3: S3 업로드 여부
         """
         if store_keys is None:
             store_keys = list(STORE_CATEGORIES.keys())
@@ -93,12 +196,20 @@ class Scheduler:
         results = {
             "start_time": start_time.isoformat(),
             "stores": {},
+            "catalog": {},
+            "products_extracted": 0,
+            "s3_upload": None,
             "errors": []
         }
 
+        # 1. 카탈로그 업데이트 (선택적)
+        if update_catalog:
+            results["catalog"] = self.update_catalogs()
+
+        # 2. 영상 수집
         for store_key in store_keys:
             store_name = STORE_CATEGORIES[store_key]["name"]
-            logger.info(f"\n[{store_name}] 수집 시작...")
+            logger.info(f"\n[{store_name}] 영상 수집 시작...")
 
             try:
                 # 파이프라인 실행
@@ -123,6 +234,14 @@ class Scheduler:
             # 매장 간 딜레이
             time.sleep(5)
 
+        # 3. 스마트 상품 추출 (선택적)
+        if extract_products:
+            results["products_extracted"] = self.run_smart_extraction()
+
+        # 4. S3 업로드 (선택적)
+        if upload_s3:
+            results["s3_upload"] = self.upload_to_s3()
+
         # 결과 저장
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -140,6 +259,7 @@ class Scheduler:
         logger.info(f"\n=== 수집 완료 ===")
         logger.info(f"소요 시간: {duration:.1f}초")
         logger.info(f"처리된 매장: {len(results['stores'])}개")
+        logger.info(f"추출된 상품: {results['products_extracted']}개")
 
         if results["errors"]:
             logger.warning(f"오류 {len(results['errors'])}건: {results['errors']}")

@@ -1,11 +1,18 @@
 """
 꿀템장바구니 - YouTube 크롤러
 유튜브 채널에서 신규 영상을 감지하고 메타데이터를 수집합니다.
+
+개선사항 (v2):
+- Exponential backoff with jitter
+- API 쿼터 모니터링
+- Circuit breaker 패턴
+- 배치 처리 최적화
 """
 import json
 import re
+import random
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -21,12 +28,194 @@ import time
 from config import YOUTUBE_API_KEY, TARGET_CHANNELS, STORE_CATEGORIES, CRAWL_CONFIG, SEARCH_KEYWORDS
 
 
+class RateLimiter:
+    """API Rate Limiting 관리"""
+    def __init__(self, calls_per_second: float = 1.0):
+        self.min_interval = 1.0 / calls_per_second
+        self.last_call = 0
+
+    def wait(self):
+        """필요시 대기"""
+        now = time.time()
+        elapsed = now - self.last_call
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self.last_call = time.time()
+
+
+class CircuitBreaker:
+    """Circuit Breaker 패턴 - 연속 실패시 요청 중단"""
+    def __init__(self, failure_threshold: int = 5, reset_timeout: int = 60):
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failures = 0
+        self.last_failure_time = 0
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+
+    def record_success(self):
+        """성공 기록"""
+        self.failures = 0
+        self.state = "CLOSED"
+
+    def record_failure(self):
+        """실패 기록"""
+        self.failures += 1
+        self.last_failure_time = time.time()
+        if self.failures >= self.failure_threshold:
+            self.state = "OPEN"
+            print(f"[WARNING] Circuit breaker OPEN - {self.failures}회 연속 실패")
+
+    def can_proceed(self) -> bool:
+        """요청 가능 여부"""
+        if self.state == "CLOSED":
+            return True
+        elif self.state == "OPEN":
+            if time.time() - self.last_failure_time > self.reset_timeout:
+                self.state = "HALF_OPEN"
+                return True
+            return False
+        else:  # HALF_OPEN
+            return True
+
+
+class QuotaTracker:
+    """YouTube API 쿼터 추적 (일일 10,000 유닛)"""
+    # API 비용 참조: https://developers.google.com/youtube/v3/determine_quota_cost
+    COSTS = {
+        "search.list": 100,
+        "videos.list": 1,
+        "channels.list": 1,
+        "playlistItems.list": 1,
+    }
+    DAILY_QUOTA = 10000
+
+    def __init__(self):
+        self.used = 0
+        self.reset_date = datetime.now().date()
+
+    def _check_reset(self):
+        """일일 리셋 확인"""
+        today = datetime.now().date()
+        if today > self.reset_date:
+            self.used = 0
+            self.reset_date = today
+
+    def add(self, operation: str, count: int = 1):
+        """쿼터 사용 기록"""
+        self._check_reset()
+        cost = self.COSTS.get(operation, 1) * count
+        self.used += cost
+
+    def remaining(self) -> int:
+        """남은 쿼터"""
+        self._check_reset()
+        return max(0, self.DAILY_QUOTA - self.used)
+
+    def can_afford(self, operation: str, count: int = 1) -> bool:
+        """요청 가능 여부"""
+        cost = self.COSTS.get(operation, 1) * count
+        return self.remaining() >= cost
+
+    def status(self) -> str:
+        """현재 상태"""
+        return f"쿼터: {self.used}/{self.DAILY_QUOTA} ({self.remaining()} 남음)"
+
+
 class YouTubeCrawler:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or YOUTUBE_API_KEY
         if not self.api_key:
             raise ValueError("YouTube API 키가 필요합니다. .env 파일을 확인하세요.")
         self.youtube = build("youtube", "v3", developerKey=self.api_key)
+
+        # 개선된 컴포넌트들
+        self.rate_limiter = RateLimiter(calls_per_second=2.0)  # 초당 2회
+        self.circuit_breaker = CircuitBreaker(failure_threshold=5, reset_timeout=60)
+        self.quota = QuotaTracker()
+
+        # 통계
+        self.stats = {
+            "api_calls": 0,
+            "successful_calls": 0,
+            "failed_calls": 0,
+            "retries": 0,
+        }
+
+    def _exponential_backoff(self, attempt: int, base_delay: float = 1.0, max_delay: float = 32.0) -> float:
+        """Exponential backoff with jitter 계산"""
+        delay = min(base_delay * (2 ** attempt), max_delay)
+        jitter = random.uniform(0, delay * 0.1)  # 10% jitter
+        return delay + jitter
+
+    def _api_call_with_retry(self, operation: str, api_func, max_retries: int = 3) -> Optional[dict]:
+        """API 호출 with retry, backoff, circuit breaker"""
+        if not self.circuit_breaker.can_proceed():
+            print(f"[WARNING] Circuit breaker OPEN - 요청 스킵")
+            return None
+
+        if not self.quota.can_afford(operation):
+            print(f"[WARNING] 쿼터 부족 - {self.quota.status()}")
+            return None
+
+        for attempt in range(max_retries):
+            try:
+                self.rate_limiter.wait()
+                self.stats["api_calls"] += 1
+
+                response = api_func()
+
+                self.circuit_breaker.record_success()
+                self.quota.add(operation)
+                self.stats["successful_calls"] += 1
+                return response
+
+            except HttpError as e:
+                self.stats["failed_calls"] += 1
+                error_reason = e.resp.status if hasattr(e, 'resp') else 'unknown'
+
+                if error_reason == 403:
+                    # 쿼터 초과
+                    print(f"[ERROR] API 쿼터 초과! {self.quota.status()}")
+                    self.circuit_breaker.record_failure()
+                    return None
+
+                elif error_reason == 429 or "rate" in str(e).lower():
+                    # Rate limit
+                    if attempt < max_retries - 1:
+                        delay = self._exponential_backoff(attempt)
+                        print(f"[WAIT] Rate limit - {delay:.1f}초 대기 후 재시도 ({attempt + 1}/{max_retries})")
+                        time.sleep(delay)
+                        self.stats["retries"] += 1
+                        continue
+
+                elif error_reason in [500, 502, 503, 504]:
+                    # 서버 오류 - 재시도
+                    if attempt < max_retries - 1:
+                        delay = self._exponential_backoff(attempt)
+                        print(f"[WAIT] 서버 오류 ({error_reason}) - {delay:.1f}초 대기 후 재시도")
+                        time.sleep(delay)
+                        self.stats["retries"] += 1
+                        continue
+
+                self.circuit_breaker.record_failure()
+                print(f"[ERROR] API 오류: {e}")
+                return None
+
+            except Exception as e:
+                self.stats["failed_calls"] += 1
+                self.circuit_breaker.record_failure()
+                print(f"[ERROR] 예외 발생: {e}")
+                return None
+
+        return None
+
+    def get_stats(self) -> dict:
+        """통계 조회"""
+        return {
+            **self.stats,
+            "quota": self.quota.status(),
+            "circuit_breaker": self.circuit_breaker.state,
+        }
 
     def get_channel_id_by_name(self, channel_name: str) -> Optional[str]:
         """채널 이름으로 채널 ID 조회"""
@@ -128,76 +317,82 @@ class YouTubeCrawler:
 
     def search_videos_by_keyword(self, keyword: str, max_results: int = 50,
                                   published_after_days: int = 30) -> list:
-        """키워드로 영상 검색"""
+        """키워드로 영상 검색 (개선된 버전)"""
         published_after = (datetime.utcnow() - timedelta(days=published_after_days)).isoformat() + "Z"
 
-        try:
-            videos = []
-            next_page_token = None
+        videos = []
+        next_page_token = None
 
-            while len(videos) < max_results:
-                response = self.youtube.search().list(
+        while len(videos) < max_results:
+            # 개선된 API 호출
+            def api_call():
+                return self.youtube.search().list(
                     part="snippet",
                     q=keyword,
                     type="video",
-                    order="viewCount",  # 조회수 순
+                    order="viewCount",
                     publishedAfter=published_after,
                     maxResults=min(50, max_results - len(videos)),
                     pageToken=next_page_token
                 ).execute()
 
-                for item in response.get("items", []):
-                    video_id = item["id"]["videoId"]
-                    snippet = item["snippet"]
+            response = self._api_call_with_retry("search.list", api_call)
 
-                    videos.append({
-                        "video_id": video_id,
-                        "title": snippet["title"],
-                        "description": snippet["description"],
-                        "channel_id": snippet["channelId"],
-                        "channel_title": snippet["channelTitle"],
-                        "published_at": snippet["publishedAt"],
-                        "thumbnail_url": snippet["thumbnails"]["high"]["url"],
-                    })
+            if not response:
+                break
 
-                next_page_token = response.get("nextPageToken")
-                if not next_page_token:
-                    break
+            for item in response.get("items", []):
+                video_id = item["id"]["videoId"]
+                snippet = item["snippet"]
 
-            return videos
-        except HttpError as e:
-            print(f"영상 검색 오류: {e}")
-            return []
+                videos.append({
+                    "video_id": video_id,
+                    "title": snippet["title"],
+                    "description": snippet["description"],
+                    "channel_id": snippet["channelId"],
+                    "channel_title": snippet["channelTitle"],
+                    "published_at": snippet["publishedAt"],
+                    "thumbnail_url": snippet["thumbnails"]["high"]["url"],
+                })
+
+            next_page_token = response.get("nextPageToken")
+            if not next_page_token:
+                break
+
+        return videos
 
     def get_video_details(self, video_ids: list) -> list:
-        """영상 상세 정보 (조회수, 좋아요 등) 조회"""
+        """영상 상세 정보 (조회수, 좋아요 등) 조회 (개선된 버전)"""
         if not video_ids:
             return []
 
-        try:
-            # 50개씩 나누어 요청 (API 제한)
-            all_details = []
-            for i in range(0, len(video_ids), 50):
-                batch_ids = video_ids[i:i+50]
-                response = self.youtube.videos().list(
+        # 50개씩 나누어 요청 (API 제한)
+        all_details = []
+        for i in range(0, len(video_ids), 50):
+            batch_ids = video_ids[i:i+50]
+
+            def api_call():
+                return self.youtube.videos().list(
                     part="statistics,contentDetails",
                     id=",".join(batch_ids)
                 ).execute()
 
-                for item in response.get("items", []):
-                    stats = item.get("statistics", {})
-                    all_details.append({
-                        "video_id": item["id"],
-                        "view_count": int(stats.get("viewCount", 0)),
-                        "like_count": int(stats.get("likeCount", 0)),
-                        "comment_count": int(stats.get("commentCount", 0)),
-                        "duration": item["contentDetails"]["duration"],
-                    })
+            response = self._api_call_with_retry("videos.list", api_call)
 
-            return all_details
-        except HttpError as e:
-            print(f"영상 상세 정보 조회 오류: {e}")
-            return []
+            if not response:
+                continue
+
+            for item in response.get("items", []):
+                stats = item.get("statistics", {})
+                all_details.append({
+                    "video_id": item["id"],
+                    "view_count": int(stats.get("viewCount", 0)),
+                    "like_count": int(stats.get("likeCount", 0)),
+                    "comment_count": int(stats.get("commentCount", 0)),
+                    "duration": item["contentDetails"]["duration"],
+                })
+
+        return all_details
 
     def get_channel_videos(self, channel_id: str, max_results: int = 10,
                            published_after_days: int = 30) -> list:

@@ -1,231 +1,143 @@
 # -*- coding: utf-8 -*-
 """
-이케아 코리아 크롤러
-IKEA API를 통해 상품 정보를 수집합니다.
+이케아 코리아 카탈로그 크롤러
+API를 통한 상품 수집
 """
 import requests
+import sqlite3
 import time
-from typing import Optional
-from dataclasses import dataclass
+from datetime import datetime
+
+DB_PATH = '../data/products.db'
+
+CATEGORIES = [
+    ('10364', '침대'),
+    ('10368', '옷장/수납'),
+    ('10382', '책상/테이블'),
+    ('10412', '의자'),
+    ('10454', '소파'),
+    ('10471', '선반'),
+    ('10508', '침구'),
+    ('10550', '조명'),
+    ('10563', '러그'),
+    ('10586', '커튼'),
+    ('10636', '욕실'),
+    ('10676', '주방'),
+    ('10732', '식기'),
+    ('10759', '조리도구'),
+    ('10810', '수납용품'),
+    ('10848', '장식소품'),
+    ('10862', '화분'),
+    ('10920', '사무용품'),
+]
+
+SEARCH_KEYWORDS = [
+    '수납', '정리함', '서랍', '선반', '행거',
+    '침대', '매트리스', '베개', '이불',
+    '책상', '의자', '테이블',
+    '조명', '스탠드', '러그', '쿠션',
+    '주방', '접시', '컵', '그릇',
+    '욕실', '수건', '거울',
+]
 
 
-@dataclass
-class IkeaProduct:
-    """이케아 상품 정보"""
-    product_code: str
-    name: str
-    type_name: str
-    price: int
-    image_url: str
-    product_url: str
-    category: str
-    rating: float
-    rating_count: int
-    measurements: str
-    color: str
-
-    def to_dict(self) -> dict:
-        return {
-            "product_no": self.product_code,
-            "name": self.name,
-            "type_name": self.type_name,
-            "price": self.price,
-            "image_url": self.image_url,
-            "product_url": self.product_url,
-            "category": self.category,
-            "rating": self.rating,
-            "rating_count": self.rating_count,
-            "measurements": self.measurements,
-            "color": self.color,
-        }
+def create_ikea_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ikea_catalog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_no TEXT UNIQUE,
+            name TEXT,
+            name_ko TEXT,
+            price INTEGER,
+            image_url TEXT,
+            product_url TEXT,
+            category TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        )
+    """)
+    conn.commit()
 
 
-class IkeaCrawler:
-    """이케아 코리아 크롤러"""
-
-    SEARCH_API = "https://sik.search.blue.cdtapps.com/kr/ko/search-result-page"
-    BASE_URL = "https://www.ikea.com/kr/ko"
-
-    # 인기 카테고리
-    CATEGORIES = {
-        "furniture": "가구",
-        "beds": "침대",
-        "sofas": "소파",
-        "storage": "수납/정리",
-        "tables": "테이블",
-        "chairs": "의자",
-        "lighting": "조명",
-        "textiles": "텍스타일",
-        "decoration": "장식",
-        "kitchen": "주방",
-        "bathroom": "욕실",
-        "outdoor": "야외가구",
+def crawl_ikea_search(session, query, limit=50):
+    url = "https://sik.search.blue.cdtapps.com/kr/ko/search-result-page"
+    params = {"q": query, "size": limit, "store": "482", "c": "sr"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+        "Origin": "https://www.ikea.com",
+        "Referer": "https://www.ikea.com/kr/ko/",
     }
-
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
-            "Accept-Language": "ko-KR,ko;q=0.9",
-        })
-
-    def search_products(self, query: str, max_results: int = 50) -> list:
-        """상품 검색"""
+    try:
+        resp = session.get(url, params=params, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
         products = []
-
-        try:
-            params = {
-                "q": query,
-                "size": min(max_results, 100),
-                "subcategories-style": "tree-navigation",
-                "sort": "RELEVANCE",
+        items = data.get("searchResultPage", {}).get("products", {}).get("main", {}).get("items", [])
+        for item in items:
+            product = item.get("product", {})
+            if not product:
+                continue
+            price_info = product.get("priceNumeral", 0)
+            p = {
+                "product_no": product.get("id", ""),
+                "name": product.get("name", ""),
+                "name_ko": product.get("typeName", "") or product.get("name", ""),
+                "price": int(price_info) if price_info else 0,
+                "image_url": product.get("mainImageUrl", ""),
+                "product_url": product.get("pipUrl", ""),
+                "category": query,
             }
-
-            response = self.session.get(self.SEARCH_API, params=params, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-
-            items = data.get("searchResultPage", {}).get("products", {}).get("main", {}).get("items", [])
-
-            for item in items[:max_results]:
-                product = self._parse_product(item.get("product", {}))
-                if product:
-                    products.append(product)
-
-        except Exception as e:
-            print(f"이케아 검색 오류 ({query}): {e}")
-
+            if p["product_no"] and p["name"]:
+                products.append(p)
         return products
-
-    def _parse_product(self, item: dict) -> Optional[IkeaProduct]:
-        """상품 데이터 파싱"""
-        try:
-            # 기본 정보
-            name = item.get("name", "")
-            type_name = item.get("typeName", "")
-            product_code = item.get("itemNoGlobal", "") or item.get("id", "")
-
-            if not name or not product_code:
-                return None
-
-            # 가격
-            price_info = item.get("salesPrice", {})
-            price = int(price_info.get("numeral", 0))
-
-            # 이미지
-            main_image = item.get("mainImageUrl", "")
-
-            # URL
-            pip_url = item.get("pipUrl", "")
-            product_url = pip_url if pip_url.startswith("http") else f"{self.BASE_URL}{pip_url}"
-
-            # 카테고리
-            category_path = item.get("categoryPath", [])
-            category = category_path[0].get("name", "") if category_path else ""
-
-            # 평점
-            rating_info = item.get("ratingValue", 0)
-            rating_count = item.get("ratingCount", 0)
-
-            # 측정
-            measurements = item.get("itemMeasureReferenceText", "")
-
-            # 색상
-            colors = item.get("colors", [])
-            color = colors[0].get("name", "") if colors else ""
-
-            return IkeaProduct(
-                product_code=product_code,
-                name=name,
-                type_name=type_name,
-                price=price,
-                image_url=main_image,
-                product_url=product_url,
-                category=category,
-                rating=float(rating_info) if rating_info else 0.0,
-                rating_count=int(rating_count) if rating_count else 0,
-                measurements=measurements,
-                color=color,
-            )
-
-        except Exception as e:
-            print(f"이케아 상품 파싱 오류: {e}")
-            return None
-
-    def search_and_match(self, query: str, threshold: float = 0.3) -> Optional[IkeaProduct]:
-        """검색 및 최적 매칭"""
-        products = self.search_products(query, max_results=10)
-
-        if not products:
-            return None
-
-        query_lower = query.lower()
-        best_match = None
-        best_score = 0
-
-        for product in products:
-            name_lower = product.name.lower()
-            type_lower = product.type_name.lower()
-            full_name = f"{name_lower} {type_lower}"
-
-            # 단어 매칭 점수
-            query_words = set(query_lower.split())
-            name_words = set(full_name.split())
-
-            if query_words and name_words:
-                intersection = query_words & name_words
-                union = query_words | name_words
-                score = len(intersection) / len(union)
-            else:
-                score = 0
-
-            # 부분 문자열 보너스
-            if query_lower in full_name:
-                score += 0.3
-
-            if score > best_score and score >= threshold:
-                best_score = score
-                best_match = product
-
-        return best_match
-
-    def get_popular_products(self, category: str = None, max_results: int = 50) -> list:
-        """인기 상품 조회"""
-        query = category if category else "베스트"
-        return self.search_products(query, max_results)
+    except Exception as e:
+        print(f"  검색 에러 ({query}): {e}")
+        return []
 
 
-def main():
-    """테스트"""
-    crawler = IkeaCrawler()
-
-    print("=== 이케아 검색 테스트 ===\n")
-
-    keywords = ["책상", "의자", "수납장", "조명"]
-
-    for keyword in keywords:
-        print(f"검색: {keyword}")
-        products = crawler.search_products(keyword, max_results=3)
-
-        for p in products:
-            print(f"  - {p.name} ({p.type_name})")
-            print(f"    가격: {p.price:,}원")
-            if p.measurements:
-                print(f"    크기: {p.measurements}")
-            print()
-
-    # 매칭 테스트
-    print("\n=== 상품 매칭 테스트 ===\n")
-    test_queries = ["말름 서랍장", "칼락스 선반", "포엥 의자"]
-
-    for query in test_queries:
-        match = crawler.search_and_match(query)
-        if match:
-            print(f"'{query}' -> {match.name} {match.type_name} ({match.price:,}원)")
+def run_ikea_catalog_crawl():
+    conn = sqlite3.connect(DB_PATH)
+    create_ikea_table(conn)
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM ikea_catalog")
+    before = cur.fetchone()[0]
+    print(f"기존 이케아 카탈로그: {before}개")
+    session = requests.Session()
+    all_products = []
+    print("=== 이케아 키워드 검색 ===")
+    for keyword in SEARCH_KEYWORDS:
+        print(f"  {keyword} 검색...")
+        products = crawl_ikea_search(session, keyword)
+        all_products.extend(products)
+        print(f"    -> {len(products)}개")
+        time.sleep(0.5)
+    seen = set()
+    unique = []
+    for p in all_products:
+        if p["product_no"] not in seen:
+            seen.add(p["product_no"])
+            unique.append(p)
+    print(f"총 수집: {len(all_products)}개 -> 중복제거: {len(unique)}개")
+    added = 0
+    for p in unique:
+        cur.execute("SELECT id FROM ikea_catalog WHERE product_no = ?", (p["product_no"],))
+        if cur.fetchone():
+            cur.execute("UPDATE ikea_catalog SET name=?, price=?, image_url=?, category=?, updated_at=datetime('now') WHERE product_no=?",
+                (p["name"], p["price"], p["image_url"], p["category"], p["product_no"]))
         else:
-            print(f"'{query}' -> 매칭 실패")
-
+            cur.execute("INSERT INTO ikea_catalog (product_no, name, name_ko, price, image_url, product_url, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                (p["product_no"], p["name"], p["name_ko"], p["price"], p["image_url"], p["product_url"], p["category"]))
+            added += 1
+    conn.commit()
+    cur.execute("SELECT COUNT(*) FROM ikea_catalog")
+    after = cur.fetchone()[0]
+    print(f"신규 추가: {added}개")
+    print(f"최종 이케아 카탈로그: {after}개")
+    conn.close()
+    return after
 
 if __name__ == "__main__":
-    main()
+    print("=== 이케아 카탈로그 크롤러 ===")
+    run_ikea_catalog_crawl()

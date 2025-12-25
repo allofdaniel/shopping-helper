@@ -292,31 +292,238 @@ class OliveyoungNaverProxy:
             return []
 
 
-def main():
-    """테스트"""
-    print("=== 올리브영 크롤러 테스트 ===\n")
+import sqlite3
+import requests
 
+DB_PATH = '../data/products.db'
+
+# 올리브영 베스트셀러/추천 키워드
+SEARCH_KEYWORDS = [
+    '선크림', '립스틱', '토너', '세럼', '에센스', '크림', '로션',
+    '클렌징', '마스크팩', '아이크림', '파운데이션', '쿠션', '컨실러',
+    '아이섀도우', '마스카라', '아이라이너', '블러셔', '하이라이터',
+    '샴푸', '컨디셔너', '바디워시', '바디로션', '핸드크림',
+    '향수', '디퓨저', '립밤', '립틴트', '립글로스',
+    '영양제', '비타민', '콜라겐', '유산균', '다이어트',
+]
+
+
+def create_oliveyoung_table(conn):
+    """올리브영 카탈로그 테이블 생성"""
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS oliveyoung_catalog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_no TEXT UNIQUE,
+            name TEXT,
+            brand TEXT,
+            price INTEGER,
+            original_price INTEGER,
+            image_url TEXT,
+            product_url TEXT,
+            category TEXT,
+            rating REAL,
+            review_count INTEGER,
+            is_best INTEGER DEFAULT 0,
+            is_sale INTEGER DEFAULT 0,
+            created_at TEXT,
+            updated_at TEXT
+        )
+    ''')
+    conn.commit()
+
+
+def run_oliveyoung_catalog_crawl():
+    """올리브영 카탈로그 크롤링 (Playwright 기반)"""
     if not PLAYWRIGHT_AVAILABLE:
-        print("Playwright 미설치")
-        print("설치 방법:")
-        print("  pip install playwright")
-        print("  playwright install chromium")
-        return
+        print("Playwright 미설치. requests로 대체 시도...")
+        return run_oliveyoung_api_crawl()
+
+    conn = sqlite3.connect(DB_PATH)
+    create_oliveyoung_table(conn)
+    cur = conn.cursor()
+
+    cur.execute('SELECT COUNT(*) FROM oliveyoung_catalog')
+    before = cur.fetchone()[0]
+    print(f'기존 올리브영 카탈로그: {before}개')
 
     crawler = OliveyoungCrawler(headless=True)
+    all_products = []
 
-    keywords = ["립스틱", "선크림"]
+    print('\n=== 올리브영 키워드 검색 ===')
+    for keyword in SEARCH_KEYWORDS:
+        print(f'  "{keyword}" 검색...')
+        try:
+            products = crawler.search_products(keyword, max_results=50)
+            all_products.extend([p.to_dict() for p in products])
+            print(f'    -> {len(products)}개')
+        except Exception as e:
+            print(f'    에러: {e}')
+        time.sleep(1)
 
-    for keyword in keywords:
-        print(f"검색: {keyword}")
-        products = crawler.search_products(keyword, max_results=3)
+    # 중복 제거
+    seen = set()
+    unique = []
+    for p in all_products:
+        if p['product_no'] and p['product_no'] not in seen:
+            seen.add(p['product_no'])
+            unique.append(p)
 
-        for p in products:
-            print(f"  - [{p.brand}] {p.name}")
-            print(f"    가격: {p.price:,}원")
-            if p.is_sale:
-                print(f"    원가: {p.original_price:,}원 (할인중)")
-            print()
+    print(f'\n총 수집: {len(all_products)}개 -> 중복제거: {len(unique)}개')
+
+    # DB 저장
+    added = 0
+    for p in unique:
+        cur.execute('SELECT id FROM oliveyoung_catalog WHERE product_no = ?', (p['product_no'],))
+        if cur.fetchone():
+            cur.execute('''
+                UPDATE oliveyoung_catalog SET name=?, brand=?, price=?, original_price=?,
+                image_url=?, category=?, updated_at=datetime('now')
+                WHERE product_no=?
+            ''', (p['name'], p['brand'], p['price'], p['original_price'],
+                  p['image_url'], p['category'], p['product_no']))
+        else:
+            cur.execute('''
+                INSERT INTO oliveyoung_catalog (product_no, name, brand, price, original_price,
+                    image_url, product_url, category, rating, review_count, is_best, is_sale, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ''', (p['product_no'], p['name'], p['brand'], p['price'], p['original_price'],
+                  p['image_url'], p['product_url'], p['category'], p['rating'],
+                  p['review_count'], 1 if p['is_best'] else 0, 1 if p['is_sale'] else 0))
+            added += 1
+
+    conn.commit()
+
+    cur.execute('SELECT COUNT(*) FROM oliveyoung_catalog')
+    after = cur.fetchone()[0]
+    print(f'\n신규 추가: {added}개')
+    print(f'최종 올리브영 카탈로그: {after}개')
+
+    conn.close()
+    return after
+
+
+def run_oliveyoung_api_crawl():
+    """올리브영 API 직접 호출 시도 (requests 기반)"""
+    conn = sqlite3.connect(DB_PATH)
+    create_oliveyoung_table(conn)
+    cur = conn.cursor()
+
+    cur.execute('SELECT COUNT(*) FROM oliveyoung_catalog')
+    before = cur.fetchone()[0]
+    print(f'기존 올리브영 카탈로그: {before}개')
+
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+        'Referer': 'https://www.oliveyoung.co.kr/',
+    })
+
+    all_products = []
+
+    # 베스트셀러 카테고리별 크롤링 시도
+    best_categories = [
+        ('1000000100010001', '스킨케어'),
+        ('1000000100010002', '마스크/팩'),
+        ('1000000100010003', '클렌징'),
+        ('1000000100020001', '립메이크업'),
+        ('1000000100020002', '베이스메이크업'),
+        ('1000000100020003', '아이메이크업'),
+        ('1000000100030001', '헤어케어'),
+        ('1000000100030002', '바디케어'),
+        ('1000000100040001', '향수'),
+        ('1000000100050001', '건강식품'),
+    ]
+
+    print('\n=== 올리브영 베스트 API 크롤링 ===')
+    for cat_code, cat_name in best_categories:
+        print(f'  {cat_name}...')
+        try:
+            url = "https://www.oliveyoung.co.kr/store/display/getBestList.do"
+            params = {
+                'dispCatNo': cat_code,
+                'pageIdx': 1,
+                'rowsPerPage': 48,
+            }
+            resp = session.get(url, params=params, timeout=15)
+
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                    items = data.get('bestList', []) or []
+                    for item in items:
+                        product = {
+                            'product_no': item.get('goodsNo', ''),
+                            'name': item.get('goodsNm', ''),
+                            'brand': item.get('brandNm', ''),
+                            'price': int(item.get('finalPrc', 0) or 0),
+                            'original_price': int(item.get('prc', 0) or 0),
+                            'image_url': item.get('goodsImg', ''),
+                            'product_url': f"https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo={item.get('goodsNo', '')}",
+                            'category': cat_name,
+                            'rating': float(item.get('reviewScore', 0) or 0),
+                            'review_count': int(item.get('reviewCnt', 0) or 0),
+                            'is_best': True,
+                            'is_sale': item.get('saleYn') == 'Y',
+                        }
+                        if product['product_no'] and product['name']:
+                            all_products.append(product)
+                    print(f'    -> {len(items)}개')
+                except:
+                    print(f'    JSON 파싱 실패')
+            else:
+                print(f'    HTTP {resp.status_code}')
+        except Exception as e:
+            print(f'    에러: {e}')
+        time.sleep(0.5)
+
+    # 중복 제거
+    seen = set()
+    unique = []
+    for p in all_products:
+        if p['product_no'] not in seen:
+            seen.add(p['product_no'])
+            unique.append(p)
+
+    print(f'\n총 수집: {len(all_products)}개 -> 중복제거: {len(unique)}개')
+
+    # DB 저장
+    added = 0
+    for p in unique:
+        cur.execute('SELECT id FROM oliveyoung_catalog WHERE product_no = ?', (p['product_no'],))
+        if cur.fetchone():
+            cur.execute('''
+                UPDATE oliveyoung_catalog SET name=?, brand=?, price=?, original_price=?,
+                image_url=?, category=?, rating=?, review_count=?, updated_at=datetime('now')
+                WHERE product_no=?
+            ''', (p['name'], p['brand'], p['price'], p['original_price'],
+                  p['image_url'], p['category'], p['rating'], p['review_count'], p['product_no']))
+        else:
+            cur.execute('''
+                INSERT INTO oliveyoung_catalog (product_no, name, brand, price, original_price,
+                    image_url, product_url, category, rating, review_count, is_best, is_sale, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ''', (p['product_no'], p['name'], p['brand'], p['price'], p['original_price'],
+                  p['image_url'], p['product_url'], p['category'], p['rating'],
+                  p['review_count'], 1 if p['is_best'] else 0, 1 if p['is_sale'] else 0))
+            added += 1
+
+    conn.commit()
+
+    cur.execute('SELECT COUNT(*) FROM oliveyoung_catalog')
+    after = cur.fetchone()[0]
+    print(f'\n신규 추가: {added}개')
+    print(f'최종 올리브영 카탈로그: {after}개')
+
+    conn.close()
+    return after
+
+
+def main():
+    """올리브영 카탈로그 크롤링 실행"""
+    print("=== 올리브영 카탈로그 크롤러 ===\n")
+    return run_oliveyoung_catalog_crawl()
 
 
 if __name__ == "__main__":

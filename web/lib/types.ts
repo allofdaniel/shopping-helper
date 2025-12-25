@@ -1,3 +1,9 @@
+export interface StoreLocation {
+  name: string
+  address: string
+  phone: string
+}
+
 export interface Product {
   id: number
   video_id: string
@@ -6,6 +12,8 @@ export interface Product {
   category: string
   reason: string
   timestamp_sec: number | null
+  timestamp_text: string | null
+  recommendation_quote: string | null  // 추천 이유 스크립트
   keywords: string[]
   store_key: string
   store_name: string
@@ -20,9 +28,14 @@ export interface Product {
   created_at: string
   video_title?: string
   channel_title?: string
+  thumbnail_url?: string
   video_view_count?: number
   coupang_price?: number | null
   coupang_url?: string | null
+  // 매장 정보
+  store_locations?: StoreLocation[] | string | null
+  product_code_display?: string | null
+  availability_note?: string | null
 }
 
 export interface Video {

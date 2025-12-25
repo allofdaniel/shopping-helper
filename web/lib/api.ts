@@ -1,6 +1,6 @@
 import type { Product, Stats } from './types'
 
-const S3_BASE_URL = 'https://notam-korea-data.s3.ap-northeast-2.amazonaws.com/shopping-helper'
+const S3_BASE_URL = 'https://notam-korea-data.s3.ap-southeast-2.amazonaws.com/shopping-helper'
 
 export async function fetchProducts(storeKey?: string): Promise<Product[]> {
   try {
@@ -20,8 +20,7 @@ export async function fetchProducts(storeKey?: string): Promise<Product[]> {
       products = products.filter((p: Product) => p.store_key === storeKey)
     }
 
-    // 승인된 상품만 (또는 매칭된 상품)
-    products = products.filter((p: Product) => p.is_approved || p.is_matched)
+    // 모든 상품 표시 (hidden 제외는 서버에서 처리)
 
     // 인기순 정렬
     products.sort((a: Product, b: Product) => (b.source_view_count || 0) - (a.source_view_count || 0))
