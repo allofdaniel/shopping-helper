@@ -23,7 +23,6 @@ export const translations = {
     new: '최신순',
     newest: '최신순',
     recommended: '추천',
-    wishlist: '찜',
     favorites: '찜',
 
     // 카테고리
@@ -111,7 +110,6 @@ export const translations = {
     new: 'Newest',
     newest: 'Newest',
     recommended: 'Recommended',
-    wishlist: 'Wishlist',
     favorites: 'Favorites',
 
     kitchen: 'Kitchen',
@@ -191,7 +189,6 @@ export const translations = {
     new: '新着順',
     newest: '新着順',
     recommended: 'おすすめ',
-    wishlist: 'お気に入り',
     favorites: 'お気に入り',
 
     kitchen: 'キッチン',

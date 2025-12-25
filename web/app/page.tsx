@@ -32,7 +32,7 @@ import { ErrorBoundary, ApiErrorDisplay } from '@/components/ErrorBoundary'
 // 6. Doherty Threshold - 400ms 이내 반응, 스켈레톤 UI
 
 // 빠른 필터 키 (Hick's Law: 핵심 5개만)
-const QUICK_FILTER_KEYS = ['all', 'popular', 'new', 'recommended', 'wishlist'] as const
+const QUICK_FILTER_KEYS = ['all', 'popular', 'new', 'recommended', 'favorites'] as const
 
 // 카테고리 키 (Miller's Law: 7개로 제한)
 const CATEGORY_KEYS = ['all', 'kitchen', 'living', 'beauty', 'interior', 'food', 'digital'] as const
@@ -43,7 +43,7 @@ const FILTER_ICONS: Record<string, string> = {
   popular: '📈',
   new: '✨',
   recommended: '💬',
-  wishlist: '❤️',
+  favorites: '❤️',
   kitchen: '🍳',
   living: '🏠',
   beauty: '💄',
@@ -351,7 +351,7 @@ export default function Home() {
                   setSelectedCategory('all')
                   setSortBy('popular')
                   setShowWishlistOnly(false)
-                } else if (key === 'wishlist') {
+                } else if (key === 'favorites') {
                   setShowWishlistOnly(!showWishlistOnly)
                 } else if (['popular', 'new', 'recommended'].includes(key)) {
                   setSortBy(key)
@@ -360,7 +360,7 @@ export default function Home() {
               }}
               className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap
                          transition-all duration-150 flex items-center gap-0.5
-                         ${(key === 'wishlist' && showWishlistOnly)
+                         ${(key === 'favorites' && showWishlistOnly)
                            ? 'bg-red-500 text-white shadow-md shadow-red-500/30'
                            : (sortBy === key && !showWishlistOnly) || (key === 'all' && selectedStore === 'all' && selectedCategory === 'all' && !showWishlistOnly)
                              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
@@ -369,7 +369,7 @@ export default function Home() {
             >
               <span>{FILTER_ICONS[key]}</span>
               <span>{t(key as any)}</span>
-              {key === 'wishlist' && wishlistCount > 0 && (
+              {key === 'favorites' && wishlistCount > 0 && (
                 <span className={`px-1 py-0.5 rounded-full text-[9px] ${showWishlistOnly ? 'bg-white/30' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
                   {wishlistCount}
                 </span>
