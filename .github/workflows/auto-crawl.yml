@@ -1,0 +1,147 @@
+# 자동 크롤링 워크플로우
+# 매일 2회 (오전 9시, 오후 9시 한국 시간) 자동 실행
+
+name: Auto Crawl & Update
+
+on:
+  schedule:
+    # 매일 오전 9시 (KST) = UTC 0시
+    - cron: '0 0 * * *'
+    # 매일 오후 9시 (KST) = UTC 12시
+    - cron: '0 12 * * *'
+  workflow_dispatch:  # 수동 실행 가능
+    inputs:
+      max_videos:
+        description: '매장당 크롤링할 영상 수'
+        required: false
+        default: '15'
+
+env:
+  PYTHON_VERSION: '3.11'
+  MAX_VIDEOS: ${{ github.event.inputs.max_videos || '15' }}
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          cd crawler
+          cat > .env << EOF
+          YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION=ap-southeast-2
+          S3_BUCKET=notam-korea-data
+          EOF
+
+      - name: Run crawling pipeline
+        run: |
+          cd crawler
+          python -c "
+          import sys
+          sys.stdout.reconfigure(encoding='utf-8')
+
+          from pipeline import DataPipeline
+
+          max_videos = int('${{ env.MAX_VIDEOS }}')
+          print(f'=== 자동 크롤링 시작 (매장당 {max_videos}개 영상) ===')
+
+          pipeline = DataPipeline()
+
+          # 다이소
+          print('\n[1/3] 다이소 크롤링...')
+          pipeline.run_full_pipeline('daiso', max_videos=max_videos)
+
+          # 코스트코
+          print('\n[2/3] 코스트코 크롤링...')
+          pipeline.run_full_pipeline('costco', max_videos=max_videos)
+
+          # 이케아
+          print('\n[3/3] 이케아 크롤링...')
+          pipeline.run_full_pipeline('ikea', max_videos=max_videos)
+
+          print('\n=== 크롤링 완료 ===')
+          "
+
+      - name: Upload to S3
+        run: |
+          cd crawler
+          python -c "
+          import sys
+          sys.stdout.reconfigure(encoding='utf-8')
+
+          from s3_uploader import S3Uploader
+
+          print('=== S3 업로드 시작 ===')
+          uploader = S3Uploader()
+
+          # JSON 업로드
+          result = uploader.upload_json_export()
+          if result:
+              print(f'JSON 업로드 완료: {result}')
+
+          # DB 백업 업로드
+          db_result = uploader.upload_database()
+          if db_result:
+              print(f'DB 백업 업로드 완료: {db_result}')
+
+          print('=== S3 업로드 완료 ===')
+          "
+
+      - name: Generate summary
+        run: |
+          cd crawler
+          python -c "
+          import sqlite3
+          import json
+
+          conn = sqlite3.connect('data/shopping_helper.db')
+          cursor = conn.cursor()
+
+          # 전체 통계
+          cursor.execute('SELECT COUNT(*) FROM products WHERE is_hidden = 0')
+          total = cursor.fetchone()[0]
+
+          # 매장별 통계
+          cursor.execute('''
+              SELECT store_key, COUNT(*)
+              FROM products
+              WHERE is_hidden = 0
+              GROUP BY store_key
+          ''')
+          stores = dict(cursor.fetchall())
+
+          conn.close()
+
+          print('## 크롤링 완료 보고서')
+          print(f'- 전체 상품: {total}개')
+          print(f'- 다이소: {stores.get(\"daiso\", 0)}개')
+          print(f'- 코스트코: {stores.get(\"costco\", 0)}개')
+          print(f'- 이케아: {stores.get(\"ikea\", 0)}개')
+          " >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-data-${{ github.run_number }}
+          path: |
+            crawler/data/shopping_helper.db
+            crawler/data/products_export.json
+          retention-days: 7
