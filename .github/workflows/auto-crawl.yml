@@ -106,42 +106,51 @@ jobs:
           "
 
       - name: Generate summary
+        continue-on-error: true
         run: |
           cd crawler
           python -c "
           import sqlite3
           import json
+          import os
 
-          conn = sqlite3.connect('data/shopping_helper.db')
-          cursor = conn.cursor()
+          db_path = 'data/shopping_helper.db'
+          if os.path.exists(db_path):
+              conn = sqlite3.connect(db_path)
+              cursor = conn.cursor()
 
-          # 전체 통계
-          cursor.execute('SELECT COUNT(*) FROM products WHERE is_hidden = 0')
-          total = cursor.fetchone()[0]
+              # 전체 통계
+              cursor.execute('SELECT COUNT(*) FROM products WHERE is_hidden = 0')
+              total = cursor.fetchone()[0]
 
-          # 매장별 통계
-          cursor.execute('''
-              SELECT store_key, COUNT(*)
-              FROM products
-              WHERE is_hidden = 0
-              GROUP BY store_key
-          ''')
-          stores = dict(cursor.fetchall())
+              # 매장별 통계
+              cursor.execute('''
+                  SELECT store_key, COUNT(*)
+                  FROM products
+                  WHERE is_hidden = 0
+                  GROUP BY store_key
+              ''')
+              stores = dict(cursor.fetchall())
 
-          conn.close()
+              conn.close()
 
-          print('## 크롤링 완료 보고서')
-          print(f'- 전체 상품: {total}개')
-          print(f'- 다이소: {stores.get(\"daiso\", 0)}개')
-          print(f'- 코스트코: {stores.get(\"costco\", 0)}개')
-          print(f'- 이케아: {stores.get(\"ikea\", 0)}개')
+              print('## 크롤링 완료 보고서')
+              print(f'- 전체 상품: {total}개')
+              print(f'- 다이소: {stores.get(\"daiso\", 0)}개')
+              print(f'- 코스트코: {stores.get(\"costco\", 0)}개')
+              print(f'- 이케아: {stores.get(\"ikea\", 0)}개')
+          else:
+              print('## 크롤링 완료')
+              print('S3에 업로드 완료되었습니다.')
           " >> $GITHUB_STEP_SUMMARY
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: crawl-data-${{ github.run_number }}
           path: |
             crawler/data/shopping_helper.db
             crawler/data/products_export.json
           retention-days: 7
+          if-no-files-found: ignore
