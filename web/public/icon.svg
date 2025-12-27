@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f97316"/>
+      <stop offset="100%" style="stop-color:#ea580c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- 장바구니 -->
+  <g fill="none" stroke="white" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 카트 바디 -->
+    <path d="M128 160 L168 160 L200 320 L400 320 L440 192 L184 192"/>
+
+    <!-- 카트 바퀴 -->
+    <circle cx="224" cy="384" r="28" fill="white"/>
+    <circle cx="376" cy="384" r="28" fill="white"/>
+  </g>
+
+  <!-- 하트 (꿀템 표시) -->
+  <path fill="#fef08a" d="M340 130
+    Q340 100, 370 100
+    Q400 100, 400 130
+    Q400 160, 370 190
+    Q340 160, 340 130
+    M400 130
+    Q400 100, 430 100
+    Q460 100, 460 130
+    Q460 160, 400 210
+    Q340 160, 340 130"/>
+</svg>

@@ -49,6 +49,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION=ap-southeast-2
           S3_BUCKET=notam-korea-data
+          DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
           EOF
 
       - name: Run crawling pipeline
@@ -65,17 +67,15 @@ jobs:
 
           pipeline = DataPipeline()
 
-          # 다이소
-          print('\n[1/3] 다이소 크롤링...')
-          pipeline.run_full_pipeline('daiso', max_videos=max_videos)
+          stores = ['daiso', 'costco', 'ikea', 'oliveyoung', 'convenience']
 
-          # 코스트코
-          print('\n[2/3] 코스트코 크롤링...')
-          pipeline.run_full_pipeline('costco', max_videos=max_videos)
-
-          # 이케아
-          print('\n[3/3] 이케아 크롤링...')
-          pipeline.run_full_pipeline('ikea', max_videos=max_videos)
+          for i, store in enumerate(stores, 1):
+              print(f'\n[{i}/{len(stores)}] {store} 크롤링...')
+              try:
+                  pipeline.run_full_pipeline(store, max_videos=max_videos)
+              except Exception as e:
+                  print(f'  {store} 크롤링 실패: {e}')
+                  continue
 
           print('\n=== 크롤링 완료 ===')
           "
