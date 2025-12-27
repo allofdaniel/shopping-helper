@@ -39,8 +39,8 @@ export function ProductListJsonLd({ products }: { products: Product[] }) {
     item: {
       '@type': 'Product',
       name: product.official_name || product.name,
-      description: product.recommendation || `${product.channel_name}님이 추천한 ${product.name}`,
-      image: product.thumbnail,
+      description: product.recommendation_quote || `${product.channel_title || '유튜버'}님이 추천한 ${product.name}`,
+      image: product.thumbnail_url,
       offers: {
         '@type': 'Offer',
         price: product.official_price || product.price || 0,
