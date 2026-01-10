@@ -1,0 +1,379 @@
+# -*- coding: utf-8 -*-
+"""
+꿀템장바구니 - 무제한 데이터 파이프라인 (yt-dlp 기반)
+YouTube API 쿼터 제한 없이 대량 수집 가능
+
+사용법:
+    # 기본 실행 (다이소, 각 채널 20개 영상)
+    python unlimited_pipeline.py
+
+    # 특정 매장
+    python unlimited_pipeline.py --store costco
+
+    # 모든 매장 수집
+    python unlimited_pipeline.py --all
+
+    # 서버 데몬 모드 (주기적 실행)
+    python unlimited_pipeline.py --daemon --interval 3600
+"""
+import argparse
+import time
+import json
+import sys
+from datetime import datetime
+from typing import Dict, List, Optional
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable, **kwargs):
+        return iterable
+
+from ytdlp_crawler import YTDLPCrawler, YTDLP_AVAILABLE
+from transcript_validator import TranscriptValidator
+from improved_product_extractor import ImprovedProductExtractor
+from improved_product_matcher import ImprovedProductMatcher
+from improved_database import ImprovedDatabase
+from config import STORE_CATEGORIES, CRAWL_CONFIG
+
+
+class UnlimitedPipeline:
+    """무제한 데이터 파이프라인 (yt-dlp 기반)"""
+
+    def __init__(self, use_daiso_enricher: bool = False):
+        """
+        Args:
+            use_daiso_enricher: 다이소 공식몰 연동 (느림, 선택적)
+        """
+        if not YTDLP_AVAILABLE:
+            raise ImportError("yt-dlp가 필요합니다. pip install yt-dlp")
+
+        self.crawler = YTDLPCrawler()
+        self.validator = TranscriptValidator()
+        self.extractor = None
+        self.matcher = None
+        self.db = ImprovedDatabase()
+        self.use_daiso_enricher = use_daiso_enricher
+
+        self._init_ai()
+
+    def _init_ai(self):
+        """AI 분석기 초기화"""
+        try:
+            self.extractor = ImprovedProductExtractor(provider="auto")
+            print(f"[OK] AI 분석기 준비됨 ({self.extractor.provider})")
+        except Exception as e:
+            print(f"[!] AI API 미설정: {e}")
+            print("    GEMINI_API_KEY 또는 OPENAI_API_KEY 환경변수 필요")
+
+        try:
+            self.matcher = ImprovedProductMatcher()
+            catalog = self.db.get_daiso_catalog_all()
+            if catalog:
+                self.matcher.set_catalog(catalog)
+                print(f"[OK] 상품 매칭기 준비됨 (카탈로그: {len(catalog)}개)")
+            else:
+                print("[!] 카탈로그 없음 - 매칭 스킵됨")
+        except Exception as e:
+            print(f"[!] 매칭기 초기화 실패: {e}")
+
+    def run(self, store_key: str = "daiso", max_videos: int = 50,
+            max_per_channel: int = 20, max_per_search: int = 10,
+            skip_existing: bool = True) -> Dict:
+        """
+        파이프라인 실행
+
+        Args:
+            store_key: 매장 키
+            max_videos: 처리할 최대 영상 수
+            max_per_channel: 채널당 최대 영상 수
+            max_per_search: 검색어당 최대 영상 수
+            skip_existing: 이미 처리된 영상 스킵
+
+        Returns:
+            실행 통계
+        """
+        store = STORE_CATEGORIES.get(store_key)
+        if not store:
+            print(f"[!] 알 수 없는 매장: {store_key}")
+            return {"error": f"알 수 없는 매장: {store_key}"}
+
+        start_time = datetime.now()
+        print(f"\n{'='*60}")
+        print(f"[무제한 파이프라인] {store['name']} 크롤링 시작")
+        print(f"시작 시간: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"설정: 채널당 {max_per_channel}개, 검색어당 {max_per_search}개")
+        print(f"{'='*60}")
+
+        stats = {
+            "store": store_key,
+            "videos_collected": 0,
+            "videos_new": 0,
+            "videos_with_transcript": 0,
+            "products_extracted": 0,
+            "products_matched": 0,
+            "products_saved": 0,
+            "errors": [],
+        }
+
+        # Step 1: 영상 수집 (yt-dlp)
+        print("\n[Step 1/5] 영상 수집 (yt-dlp - 무제한)...")
+        try:
+            videos = self.crawler.full_crawl(
+                store_key,
+                max_channel_videos=max_per_channel,
+                max_search_videos=max_per_search,
+            )
+            stats["videos_collected"] = len(videos)
+            print(f"  -> {len(videos)}개 영상 수집됨")
+
+            # DB에 저장 및 중복 체크
+            new_videos = []
+            for video in videos:
+                existing = self.db.get_video_by_id(video['video_id'])
+                if existing and skip_existing:
+                    continue  # 이미 처리된 영상 스킵
+                if self.db.insert_video(video):
+                    new_videos.append(video)
+
+            stats["videos_new"] = len(new_videos)
+            print(f"  -> {len(new_videos)}개 신규 영상")
+
+            # 처리할 영상 제한
+            videos_to_process = new_videos[:max_videos]
+
+        except Exception as e:
+            print(f"  [에러] 영상 수집 실패: {e}")
+            stats["errors"].append(f"영상 수집: {e}")
+            videos_to_process = []
+
+        if not videos_to_process:
+            print("\n[완료] 처리할 새 영상이 없습니다.")
+            return stats
+
+        # Step 2: 자막 추출 및 검증
+        print(f"\n[Step 2/5] 자막 추출 ({len(videos_to_process)}개 영상)...")
+        valid_videos = []
+
+        for video in tqdm(videos_to_process, desc="  자막"):
+            video_id = video['video_id']
+
+            # 자막 추출
+            transcript = self.crawler.get_video_transcript(video_id)
+
+            # 자막 없으면 제목+설명 사용
+            if not transcript:
+                title = video.get('title', '')
+                description = video.get('description', '')
+                if title or description:
+                    transcript = f"{title}\n\n{description}"
+
+            # 품질 검증
+            if transcript:
+                validation = self.validator.validate(transcript, store['name'])
+
+                if validation.is_valid:
+                    self.db.update_video_transcript(
+                        video_id, transcript, validation.quality_score
+                    )
+                    valid_videos.append({
+                        **video,
+                        'transcript': transcript,
+                        'quality_score': validation.quality_score,
+                    })
+                else:
+                    self.db.update_video_status(video_id, 'low_quality')
+            else:
+                self.db.update_video_status(video_id, 'no_transcript')
+
+            time.sleep(0.5)
+
+        stats["videos_with_transcript"] = len(valid_videos)
+        print(f"  -> 유효한 자막: {len(valid_videos)}개")
+
+        if not valid_videos:
+            print("\n[완료] 유효한 자막이 있는 영상이 없습니다.")
+            return stats
+
+        # Step 3: AI 상품 추출
+        if not self.extractor:
+            print("\n[Step 3/5] AI 상품 추출... (스킵 - AI 미설정)")
+            all_products = []
+        else:
+            print(f"\n[Step 3/5] AI 상품 추출 ({len(valid_videos)}개 영상)...")
+            all_products = []
+
+            for video in tqdm(valid_videos, desc="  AI"):
+                try:
+                    products = self.extractor.extract_products(
+                        video['transcript'], store['name']
+                    )
+
+                    for product in products:
+                        product['video_id'] = video['video_id']
+                        product['store_key'] = store_key
+                        product['store_name'] = store['name']
+                        product['source_view_count'] = video.get('view_count', 0)
+                        product['channel_title'] = video.get('channel_title', '')
+                        product['video_title'] = video.get('title', '')
+                        all_products.append(product)
+
+                    self.db.update_video_status(video['video_id'], 'analyzed')
+
+                except Exception as e:
+                    print(f"  [에러] {video['video_id']}: {e}")
+                    stats["errors"].append(f"AI 추출: {e}")
+
+                time.sleep(1)  # AI API 속도 제한
+
+            stats["products_extracted"] = len(all_products)
+            print(f"  -> {len(all_products)}개 상품 추출됨")
+
+        # Step 4: 매장 상품 매칭
+        print("\n[Step 4/5] 매장 상품 매칭...")
+        enriched_products = []
+
+        if self.matcher and self.matcher.catalog:
+            for product in tqdm(all_products, desc="  매칭"):
+                match = self.matcher.match(
+                    product_name=product.get('name', ''),
+                    price=product.get('price'),
+                    category=product.get('category'),
+                    keywords=product.get('keywords', []),
+                )
+
+                if match:
+                    product['official'] = match.to_dict()
+                    product['needs_manual_review'] = match.needs_manual_review
+                    stats["products_matched"] += 1
+                else:
+                    product['official'] = {}
+                    product['needs_manual_review'] = True
+
+                enriched_products.append(product)
+
+            print(f"  -> {stats['products_matched']}/{len(enriched_products)}개 매칭")
+        else:
+            enriched_products = all_products
+            for p in enriched_products:
+                p['needs_manual_review'] = True
+            print("  -> 매칭 스킵 (카탈로그 없음)")
+
+        # Step 5: DB 저장
+        print("\n[Step 5/5] DB 저장...")
+        for product in enriched_products:
+            if self.db.insert_product(product):
+                stats["products_saved"] += 1
+
+        print(f"  -> {stats['products_saved']}개 저장됨")
+
+        # 결과 요약
+        end_time = datetime.now()
+        elapsed = (end_time - start_time).total_seconds()
+        stats["elapsed_seconds"] = elapsed
+
+        print(f"\n{'='*60}")
+        print(f"[무제한 파이프라인] 완료!")
+        print(f"{'='*60}")
+        print(f"소요 시간: {elapsed:.1f}초")
+        print(f"수집 영상: {stats['videos_collected']}")
+        print(f"신규 영상: {stats['videos_new']}")
+        print(f"유효 자막: {stats['videos_with_transcript']}")
+        print(f"추출 상품: {stats['products_extracted']}")
+        print(f"매칭 성공: {stats['products_matched']}")
+        print(f"저장 완료: {stats['products_saved']}")
+
+        if stats["errors"]:
+            print(f"\n에러: {len(stats['errors'])}건")
+
+        return stats
+
+    def run_all_stores(self, **kwargs) -> Dict[str, Dict]:
+        """모든 매장 수집"""
+        results = {}
+
+        stores = list(STORE_CATEGORIES.keys())
+        print(f"\n=== 전체 매장 수집 시작 ({len(stores)}개 매장) ===")
+
+        for i, store_key in enumerate(stores, 1):
+            print(f"\n[{i}/{len(stores)}] {store_key}")
+            try:
+                results[store_key] = self.run(store_key, **kwargs)
+            except Exception as e:
+                print(f"  [에러] {store_key} 수집 실패: {e}")
+                results[store_key] = {"error": str(e)}
+
+        # 전체 통계
+        total_videos = sum(r.get('videos_collected', 0) for r in results.values())
+        total_products = sum(r.get('products_saved', 0) for r in results.values())
+
+        print(f"\n=== 전체 수집 완료 ===")
+        print(f"총 영상: {total_videos}개")
+        print(f"총 상품: {total_products}개")
+
+        return results
+
+    def run_daemon(self, interval_seconds: int = 3600, stores: List[str] = None):
+        """
+        데몬 모드 - 주기적으로 수집 실행
+
+        Args:
+            interval_seconds: 실행 간격 (초)
+            stores: 수집할 매장 목록 (None이면 전체)
+        """
+        if stores is None:
+            stores = list(STORE_CATEGORIES.keys())
+
+        print(f"\n=== 데몬 모드 시작 ===")
+        print(f"수집 대상: {', '.join(stores)}")
+        print(f"실행 간격: {interval_seconds}초 ({interval_seconds/3600:.1f}시간)")
+        print(f"종료: Ctrl+C")
+
+        run_count = 0
+        while True:
+            run_count += 1
+            print(f"\n{'='*60}")
+            print(f"[실행 #{run_count}] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"{'='*60}")
+
+            for store_key in stores:
+                try:
+                    self.run(store_key, max_videos=20)
+                except Exception as e:
+                    print(f"[에러] {store_key}: {e}")
+
+            print(f"\n다음 실행까지 {interval_seconds}초 대기...")
+            time.sleep(interval_seconds)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="꿀템장바구니 무제한 파이프라인")
+    parser.add_argument('--store', type=str, default='daiso', help='수집할 매장 (기본: daiso)')
+    parser.add_argument('--all', action='store_true', help='모든 매장 수집')
+    parser.add_argument('--max-videos', type=int, default=50, help='처리할 최대 영상 수')
+    parser.add_argument('--max-per-channel', type=int, default=20, help='채널당 최대 영상 수')
+    parser.add_argument('--daemon', action='store_true', help='데몬 모드 (주기적 실행)')
+    parser.add_argument('--interval', type=int, default=3600, help='데몬 실행 간격 (초)')
+
+    args = parser.parse_args()
+
+    pipeline = UnlimitedPipeline()
+
+    if args.daemon:
+        stores = None if args.all else [args.store]
+        pipeline.run_daemon(interval_seconds=args.interval, stores=stores)
+    elif args.all:
+        pipeline.run_all_stores(
+            max_videos=args.max_videos,
+            max_per_channel=args.max_per_channel,
+        )
+    else:
+        pipeline.run(
+            store_key=args.store,
+            max_videos=args.max_videos,
+            max_per_channel=args.max_per_channel,
+        )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,7 @@
 # YouTube 데이터 수집
-google-api-python-client>=2.100.0
-youtube-transcript-api==0.6.1  # 0.6.1 고정 (1.x 버전은 API 변경됨)
+yt-dlp>=2024.1.0  # 메인 크롤러 (API 쿼터 제한 없음)
+google-api-python-client>=2.100.0  # 백업용
+youtube-transcript-api>=1.0.0  # 자막 추출 백업용
 
 # AI 분석
 openai>=1.0.0
@@ -36,3 +37,6 @@ ratelimit>=2.2.1
 
 # 유틸리티
 tqdm>=4.66.0
+
+# Playwright (웹 스크래핑 - 다이소몰 등)
+playwright>=1.40.0

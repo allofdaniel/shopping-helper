@@ -1,0 +1,27 @@
+[Unit]
+Description=꿀템장바구니 YouTube 크롤러 데몬
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/shopping-helper/crawler
+Environment=PATH=/root/shopping-helper/venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+
+# .env 파일에서 환경변수 로드
+EnvironmentFile=/root/shopping-helper/crawler/.env
+
+# 실행 명령 (모든 매장 1시간 간격)
+ExecStart=/root/shopping-helper/venv/bin/python unlimited_pipeline.py --all --daemon --interval 3600
+
+# 재시작 설정
+Restart=always
+RestartSec=30
+
+# 로그
+StandardOutput=append:/var/log/shopping-crawler.log
+StandardError=append:/var/log/shopping-crawler-error.log
+
+[Install]
+WantedBy=multi-user.target
