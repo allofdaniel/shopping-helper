@@ -136,6 +136,25 @@ class ImprovedDatabase:
             )
         """)
 
+        # 코스트코 카탈로그 테이블
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS costco_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_code TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                price INTEGER,
+                image_url TEXT,
+                product_url TEXT,
+                category TEXT,
+                unit_price TEXT,
+                rating REAL DEFAULT 0,
+                review_count INTEGER DEFAULT 0,
+                keywords TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # 품질 로그 테이블 (새로 추가)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS quality_logs (
@@ -605,6 +624,68 @@ class ImprovedDatabase:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM daiso_catalog ORDER BY order_count DESC")
         return [dict(row) for row in cursor.fetchall()]
+
+    # ========== 코스트코 카탈로그 ==========
+
+    def insert_costco_product(self, product: dict) -> bool:
+        """코스트코 상품 저장 (upsert)"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO costco_catalog
+                (product_code, name, price, image_url, product_url, category,
+                 unit_price, rating, review_count, keywords, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_code) DO UPDATE SET
+                    name = excluded.name,
+                    price = excluded.price,
+                    image_url = excluded.image_url,
+                    product_url = excluded.product_url,
+                    unit_price = excluded.unit_price,
+                    rating = excluded.rating,
+                    review_count = excluded.review_count,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                product.get("product_code"),
+                product.get("name"),
+                product.get("price"),
+                product.get("image_url"),
+                product.get("product_url"),
+                product.get("category", ""),
+                product.get("unit_price", ""),
+                product.get("rating", 0),
+                product.get("review_count", 0),
+                product.get("keywords", ""),
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"코스트코 상품 저장 오류: {e}")
+            return False
+
+    def search_costco_catalog(self, keyword: str, limit: int = 20) -> list:
+        """코스트코 카탈로그에서 상품 검색"""
+        cursor = self.conn.cursor()
+        search_term = f"%{keyword}%"
+        cursor.execute("""
+            SELECT * FROM costco_catalog
+            WHERE name LIKE ? OR keywords LIKE ?
+            ORDER BY review_count DESC
+            LIMIT ?
+        """, (search_term, search_term, limit))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_costco_catalog_all(self) -> list:
+        """코스트코 카탈로그 전체 조회"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM costco_catalog ORDER BY review_count DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_costco_catalog_count(self) -> int:
+        """코스트코 카탈로그 상품 수"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM costco_catalog")
+        return cursor.fetchone()[0]
 
     # ========== 통계 ==========
 

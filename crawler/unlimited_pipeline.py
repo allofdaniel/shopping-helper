@@ -47,6 +47,13 @@ try:
 except ImportError:
     CATALOG_CRAWLER_AVAILABLE = False
 
+# 코스트코 크롤러
+try:
+    from costco_scraper import CostcoScraper, COSTCO_SEARCH_KEYWORDS
+    COSTCO_SCRAPER_AVAILABLE = True
+except ImportError:
+    COSTCO_SCRAPER_AVAILABLE = False
+
 # 카탈로그 크롤링 설정
 CATALOG_CONFIG = {
     "daiso": {
@@ -61,6 +68,23 @@ CATALOG_CONFIG = {
             "행거", "후크", "수납", "바구니", "트레이",
         ],
         "update_interval_hours": 24,  # 카탈로그 업데이트 주기
+    },
+    "costco": {
+        "enabled": True,
+        "crawler_class": "CostcoScraper",
+        "keywords": [
+            "과자", "스낵", "견과류", "초콜릿", "커피",
+            "음료", "생수", "주스", "차", "우유",
+            "고기", "소고기", "돼지고기", "닭고기", "해산물",
+            "과일", "채소", "샐러드", "냉동식품", "피자",
+            "라면", "즉석밥", "통조림", "소스", "조미료",
+            "세제", "화장지", "청소용품", "주방용품", "생활용품",
+        ],
+        "categories": [
+            "/c/SpecialPriceOffers",  # 스페셜 할인
+            "/c/BuyersPick",  # Buyer's Pick
+        ],
+        "update_interval_hours": 24,
     },
 }
 
@@ -211,6 +235,81 @@ class UnlimitedPipeline:
                 if catalog and self.matcher:
                     self.matcher.set_catalog(catalog)
                     print(f"매칭기 카탈로그 업데이트: {len(catalog)}개")
+
+            finally:
+                await scraper.close()
+
+        elif store_key == "costco":
+            if not COSTCO_SCRAPER_AVAILABLE:
+                return {"error": "코스트코 스크래퍼를 불러올 수 없습니다"}
+
+            from costco_scraper import CostcoScraper
+
+            scraper = CostcoScraper(headless=True)
+
+            try:
+                all_products = []
+
+                # 키워드별 검색
+                keywords = config.get("keywords", [])
+                print(f"\n검색 키워드: {len(keywords)}개")
+
+                for keyword in keywords:
+                    print(f"  검색: '{keyword}'")
+                    try:
+                        products = await scraper.search_products(keyword, limit=20)
+                        stats["products_crawled"] += len(products)
+
+                        for p in products:
+                            all_products.append(p)
+                            print(f"    - {p.name}: {p.price:,}원 (코드: {p.product_code})")
+
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{keyword}: {e}")
+
+                    await asyncio.sleep(2)  # 사이트 부하 방지
+
+                # 카테고리별 검색
+                categories = config.get("categories", [])
+                print(f"\n카테고리 검색: {len(categories)}개")
+
+                for category in categories:
+                    print(f"  카테고리: '{category}'")
+                    try:
+                        products = await scraper.get_category_products(category, limit=50)
+                        stats["products_crawled"] += len(products)
+
+                        for p in products:
+                            all_products.append(p)
+
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{category}: {e}")
+
+                    await asyncio.sleep(2)
+
+                # 중복 제거 및 DB 저장
+                seen_codes = set()
+                for p in all_products:
+                    if p.product_code not in seen_codes:
+                        seen_codes.add(p.product_code)
+                        product_dict = {
+                            "product_code": p.product_code,
+                            "name": p.name,
+                            "price": p.price,
+                            "image_url": p.image_url,
+                            "product_url": p.product_url,
+                            "category": p.category,
+                            "unit_price": p.unit_price,
+                            "rating": p.rating,
+                            "review_count": p.review_count,
+                        }
+                        if self.db.insert_costco_product(product_dict):
+                            stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장 (중복 제외)")
 
             finally:
                 await scraper.close()
