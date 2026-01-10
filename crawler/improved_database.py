@@ -155,6 +155,50 @@ class ImprovedDatabase:
             )
         """)
 
+        # 올리브영 카탈로그 테이블
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS oliveyoung_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_code TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                brand TEXT,
+                price INTEGER,
+                original_price INTEGER,
+                image_url TEXT,
+                product_url TEXT,
+                category TEXT,
+                rating REAL DEFAULT 0,
+                review_count INTEGER DEFAULT 0,
+                is_best INTEGER DEFAULT 0,
+                is_sale INTEGER DEFAULT 0,
+                keywords TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 쿠팡 카탈로그 테이블
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS coupang_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                price INTEGER,
+                original_price INTEGER,
+                image_url TEXT,
+                product_url TEXT,
+                category TEXT,
+                rating REAL DEFAULT 0,
+                review_count INTEGER DEFAULT 0,
+                is_rocket INTEGER DEFAULT 0,
+                is_rocket_fresh INTEGER DEFAULT 0,
+                seller TEXT,
+                keywords TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # 품질 로그 테이블 (새로 추가)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS quality_logs (
@@ -685,6 +729,142 @@ class ImprovedDatabase:
         """코스트코 카탈로그 상품 수"""
         cursor = self.conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM costco_catalog")
+        return cursor.fetchone()[0]
+
+    # ========== 올리브영 카탈로그 ==========
+
+    def insert_oliveyoung_product(self, product: dict) -> bool:
+        """올리브영 상품 저장 (upsert)"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO oliveyoung_catalog
+                (product_code, name, brand, price, original_price, image_url, product_url,
+                 category, rating, review_count, is_best, is_sale, keywords, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_code) DO UPDATE SET
+                    name = excluded.name,
+                    brand = excluded.brand,
+                    price = excluded.price,
+                    original_price = excluded.original_price,
+                    image_url = excluded.image_url,
+                    product_url = excluded.product_url,
+                    rating = excluded.rating,
+                    review_count = excluded.review_count,
+                    is_best = excluded.is_best,
+                    is_sale = excluded.is_sale,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                product.get("product_code"),
+                product.get("name"),
+                product.get("brand", ""),
+                product.get("price"),
+                product.get("original_price", 0),
+                product.get("image_url"),
+                product.get("product_url"),
+                product.get("category", ""),
+                product.get("rating", 0),
+                product.get("review_count", 0),
+                1 if product.get("is_best") else 0,
+                1 if product.get("is_sale") else 0,
+                product.get("keywords", ""),
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"올리브영 상품 저장 오류: {e}")
+            return False
+
+    def search_oliveyoung_catalog(self, keyword: str, limit: int = 20) -> list:
+        """올리브영 카탈로그에서 상품 검색"""
+        cursor = self.conn.cursor()
+        search_term = f"%{keyword}%"
+        cursor.execute("""
+            SELECT * FROM oliveyoung_catalog
+            WHERE name LIKE ? OR brand LIKE ? OR keywords LIKE ?
+            ORDER BY review_count DESC
+            LIMIT ?
+        """, (search_term, search_term, search_term, limit))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_oliveyoung_catalog_all(self) -> list:
+        """올리브영 카탈로그 전체 조회"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM oliveyoung_catalog ORDER BY review_count DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_oliveyoung_catalog_count(self) -> int:
+        """올리브영 카탈로그 상품 수"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM oliveyoung_catalog")
+        return cursor.fetchone()[0]
+
+    # ========== 쿠팡 카탈로그 ==========
+
+    def insert_coupang_product(self, product: dict) -> bool:
+        """쿠팡 상품 저장 (upsert)"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO coupang_catalog
+                (product_id, name, price, original_price, image_url, product_url,
+                 category, rating, review_count, is_rocket, is_rocket_fresh, seller, keywords, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_id) DO UPDATE SET
+                    name = excluded.name,
+                    price = excluded.price,
+                    original_price = excluded.original_price,
+                    image_url = excluded.image_url,
+                    product_url = excluded.product_url,
+                    rating = excluded.rating,
+                    review_count = excluded.review_count,
+                    is_rocket = excluded.is_rocket,
+                    is_rocket_fresh = excluded.is_rocket_fresh,
+                    seller = excluded.seller,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                product.get("product_id"),
+                product.get("name"),
+                product.get("price"),
+                product.get("original_price", 0),
+                product.get("image_url"),
+                product.get("product_url"),
+                product.get("category", ""),
+                product.get("rating", 0),
+                product.get("review_count", 0),
+                1 if product.get("is_rocket") else 0,
+                1 if product.get("is_rocket_fresh") else 0,
+                product.get("seller", ""),
+                product.get("keywords", ""),
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"쿠팡 상품 저장 오류: {e}")
+            return False
+
+    def search_coupang_catalog(self, keyword: str, limit: int = 20) -> list:
+        """쿠팡 카탈로그에서 상품 검색"""
+        cursor = self.conn.cursor()
+        search_term = f"%{keyword}%"
+        cursor.execute("""
+            SELECT * FROM coupang_catalog
+            WHERE name LIKE ? OR keywords LIKE ?
+            ORDER BY review_count DESC
+            LIMIT ?
+        """, (search_term, search_term, limit))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_coupang_catalog_all(self) -> list:
+        """쿠팡 카탈로그 전체 조회"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM coupang_catalog ORDER BY review_count DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_coupang_catalog_count(self) -> int:
+        """쿠팡 카탈로그 상품 수"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM coupang_catalog")
         return cursor.fetchone()[0]
 
     # ========== 통계 ==========

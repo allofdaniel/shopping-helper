@@ -54,6 +54,20 @@ try:
 except ImportError:
     COSTCO_SCRAPER_AVAILABLE = False
 
+# 올리브영 크롤러
+try:
+    from oliveyoung_scraper import OliveyoungScraper, OLIVEYOUNG_SEARCH_KEYWORDS
+    OLIVEYOUNG_SCRAPER_AVAILABLE = True
+except ImportError:
+    OLIVEYOUNG_SCRAPER_AVAILABLE = False
+
+# 쿠팡 크롤러
+try:
+    from coupang_scraper import CoupangScraper, COUPANG_SEARCH_KEYWORDS
+    COUPANG_SCRAPER_AVAILABLE = True
+except ImportError:
+    COUPANG_SCRAPER_AVAILABLE = False
+
 # 카탈로그 크롤링 설정
 CATALOG_CONFIG = {
     "daiso": {
@@ -84,6 +98,30 @@ CATALOG_CONFIG = {
             "/c/SpecialPriceOffers",  # 스페셜 할인
             "/c/BuyersPick",  # Buyer's Pick
         ],
+        "update_interval_hours": 24,
+    },
+    "oliveyoung": {
+        "enabled": True,
+        "crawler_class": "OliveyoungScraper",
+        "keywords": [
+            "선크림", "클렌징", "토너", "에센스", "크림",
+            "마스크팩", "립스틱", "파운데이션", "쿠션", "아이라이너",
+            "샴푸", "트리트먼트", "바디로션", "핸드크림", "향수",
+            "비타민", "영양제", "다이어트", "건강식품", "유산균",
+        ],
+        "categories": [],
+        "update_interval_hours": 24,
+    },
+    "coupang": {
+        "enabled": True,
+        "crawler_class": "CoupangScraper",
+        "keywords": [
+            "생활용품", "주방용품", "욕실용품", "청소용품", "수납정리",
+            "식품", "과자", "음료", "라면", "즉석식품",
+            "건강식품", "비타민", "유산균", "다이어트",
+            "화장품", "스킨케어", "메이크업",
+        ],
+        "categories": [],
         "update_interval_hours": 24,
     },
 }
@@ -306,6 +344,123 @@ class UnlimitedPipeline:
                             "review_count": p.review_count,
                         }
                         if self.db.insert_costco_product(product_dict):
+                            stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장 (중복 제외)")
+
+            finally:
+                await scraper.close()
+
+        elif store_key == "oliveyoung":
+            if not OLIVEYOUNG_SCRAPER_AVAILABLE:
+                return {"error": "올리브영 스크래퍼를 불러올 수 없습니다"}
+
+            from oliveyoung_scraper import OliveyoungScraper
+
+            scraper = OliveyoungScraper(headless=True)
+
+            try:
+                all_products = []
+
+                # 키워드별 검색
+                keywords = config.get("keywords", [])
+                print(f"\n검색 키워드: {len(keywords)}개")
+
+                for keyword in keywords:
+                    print(f"  검색: '{keyword}'")
+                    try:
+                        products = await scraper.search_products(keyword, limit=20)
+                        stats["products_crawled"] += len(products)
+
+                        for p in products:
+                            all_products.append(p)
+                            print(f"    - [{p.brand}] {p.name}: {p.price:,}원")
+
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{keyword}: {e}")
+
+                    await asyncio.sleep(3)  # 봇 탐지 방지를 위한 더 긴 딜레이
+
+                # 중복 제거 및 DB 저장
+                seen_codes = set()
+                for p in all_products:
+                    if p.product_code not in seen_codes:
+                        seen_codes.add(p.product_code)
+                        product_dict = {
+                            "product_code": p.product_code,
+                            "name": p.name,
+                            "brand": p.brand,
+                            "price": p.price,
+                            "original_price": p.original_price,
+                            "image_url": p.image_url,
+                            "product_url": p.product_url,
+                            "rating": p.rating,
+                            "review_count": p.review_count,
+                            "is_best": p.is_best,
+                            "is_sale": p.is_sale,
+                        }
+                        if self.db.insert_oliveyoung_product(product_dict):
+                            stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장 (중복 제외)")
+
+            finally:
+                await scraper.close()
+
+        elif store_key == "coupang":
+            if not COUPANG_SCRAPER_AVAILABLE:
+                return {"error": "쿠팡 스크래퍼를 불러올 수 없습니다"}
+
+            from coupang_scraper import CoupangScraper
+
+            scraper = CoupangScraper(headless=True)
+
+            try:
+                all_products = []
+
+                # 키워드별 검색
+                keywords = config.get("keywords", [])
+                print(f"\n검색 키워드: {len(keywords)}개")
+
+                for keyword in keywords:
+                    print(f"  검색: '{keyword}'")
+                    try:
+                        products = await scraper.search_products(keyword, limit=20)
+                        stats["products_crawled"] += len(products)
+
+                        for p in products:
+                            all_products.append(p)
+                            rocket = "🚀" if p.is_rocket else ""
+                            print(f"    - {p.name}: {p.price:,}원 {rocket}")
+
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{keyword}: {e}")
+
+                    await asyncio.sleep(5)  # 쿠팡은 봇 탐지가 강해서 더 긴 딜레이
+
+                # 중복 제거 및 DB 저장
+                seen_ids = set()
+                for p in all_products:
+                    if p.product_id not in seen_ids:
+                        seen_ids.add(p.product_id)
+                        product_dict = {
+                            "product_id": p.product_id,
+                            "name": p.name,
+                            "price": p.price,
+                            "original_price": p.original_price,
+                            "image_url": p.image_url,
+                            "product_url": p.product_url,
+                            "rating": p.rating,
+                            "review_count": p.review_count,
+                            "is_rocket": p.is_rocket,
+                            "is_rocket_fresh": p.is_rocket_fresh,
+                            "seller": p.seller,
+                        }
+                        if self.db.insert_coupang_product(product_dict):
                             stats["products_saved"] += 1
 
                 print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
