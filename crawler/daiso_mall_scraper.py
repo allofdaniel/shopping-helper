@@ -149,34 +149,56 @@ class DaisoMallScraper:
             return []
 
     async def _parse_search_results(self, limit: int) -> List[DaisoProduct]:
-        """검색 결과 파싱 (2025 업데이트)"""
+        """검색 결과 파싱 (2025 업데이트) - JavaScript evaluate 방식"""
         products = []
 
         try:
-            # 상품 링크들 찾기 (품번이 포함된 링크)
-            # 구조: link "가격 원 상품명 품번: 품번번호"
-            product_links = await self.page.query_selector_all('a[href*="pdNo="]')
+            # JavaScript로 직접 모든 링크 정보 추출 (query_selector가 동작하지 않는 경우 대비)
+            product_data = await self.page.evaluate('''() => {
+                const results = [];
+                const links = document.querySelectorAll('a[href*="pdNo="]');
+
+                links.forEach(link => {
+                    const href = link.getAttribute('href') || '';
+                    const text = link.innerText || '';
+                    const img = link.querySelector('img');
+                    const imgSrc = img ? img.getAttribute('src') : '';
+
+                    // pdNo 추출
+                    const pdNoMatch = href.match(/pdNo=(\\d+)/);
+                    if (pdNoMatch) {
+                        results.push({
+                            pdNo: pdNoMatch[1],
+                            href: href,
+                            text: text.trim(),
+                            imgSrc: imgSrc || ''
+                        });
+                    }
+                });
+
+                return results;
+            }''')
+
+            if not product_data:
+                print("[경고] JavaScript evaluate로도 상품을 찾지 못함")
+                return products
+
+            print(f"[정보] JavaScript evaluate로 {len(product_data)}개 링크 발견")
 
             seen_product_nos = set()
-            for link in product_links[:limit * 3]:  # 중복 고려해서 여유있게
+            for item in product_data:
                 try:
-                    href = await link.get_attribute("href")
-                    if not href:
-                        continue
+                    product_no = item.get('pdNo', '')
+                    text = item.get('text', '')
+                    image_url = item.get('imgSrc', '')
 
-                    # 품번 추출
-                    match = re.search(r'pdNo=(\d+)', href)
-                    if not match:
+                    if not product_no:
                         continue
-
-                    product_no = match.group(1)
 
                     # 중복 체크
                     if product_no in seen_product_nos:
                         continue
 
-                    # 링크 텍스트 가져오기
-                    text = await link.inner_text()
                     if not text or len(text.strip()) < 5:
                         continue
 
@@ -211,15 +233,6 @@ class DaisoMallScraper:
                         continue
 
                     seen_product_nos.add(product_no)
-
-                    # 이미지 URL 추출 시도
-                    image_url = ""
-                    try:
-                        img = await link.query_selector('img')
-                        if img:
-                            image_url = await img.get_attribute('src') or ""
-                    except:
-                        pass
 
                     product_url = f"https://prdm.daisomall.co.kr/pd/pdl/SCR_PDL_0001?pdNo={product_no}"
 
