@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-다이소몰 스크래퍼
+다이소몰 스크래퍼 (2024-2025 업데이트)
 - 상품명으로 품번 검색
 - 품번으로 상품 정보 조회
 - 공식몰 URL 및 상세정보 추출
+
+사이트 구조:
+- 검색 URL: https://prdm.daisomall.co.kr/ms/msb/SCR_MSB_0011?selectPdList=검색어
+- 상품 링크 형태: link "가격 원 상품명 품번: 품번"
 """
 import re
 import time
 import json
 import asyncio
+import urllib.parse
 from typing import Optional, List, Dict
 from dataclasses import dataclass
 
@@ -54,12 +59,14 @@ class DaisoMallScraper:
     """다이소몰 스크래퍼 (Playwright 기반)"""
 
     BASE_URL = "https://prdm.daisomall.co.kr"
-    SEARCH_URL = "https://prdm.daisomall.co.kr/ms/msb/SCR_MSB_0011?tab=tab2"
+    SEARCH_URL = "https://prdm.daisomall.co.kr/ms/msb/SCR_MSB_0011"
 
     def __init__(self, headless: bool = True):
         self.headless = headless
         self.browser = None
         self.page = None
+        self.context = None
+        self.playwright = None
 
     async def _init_browser(self):
         """브라우저 초기화"""
@@ -70,16 +77,28 @@ class DaisoMallScraper:
         self.browser = await self.playwright.chromium.launch(headless=self.headless)
         self.context = await self.browser.new_context(
             viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         self.page = await self.context.new_page()
 
     async def _close_browser(self):
         """브라우저 종료"""
-        if self.browser:
-            await self.browser.close()
-        if hasattr(self, 'playwright') and self.playwright:
-            await self.playwright.stop()
+        try:
+            if self.page:
+                await self.page.close()
+            if self.context:
+                await self.context.close()
+            if self.browser:
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+        except Exception:
+            pass
+        finally:
+            self.page = None
+            self.context = None
+            self.browser = None
+            self.playwright = None
 
     async def search_products(self, query: str, limit: int = 20) -> List[DaisoProduct]:
         """
@@ -96,19 +115,13 @@ class DaisoMallScraper:
             await self._init_browser()
 
         try:
-            # 검색 페이지로 이동
-            await self.page.goto(self.SEARCH_URL, wait_until="networkidle", timeout=30000)
-            await asyncio.sleep(1)
+            # URL 인코딩된 검색어로 직접 이동 (더 안정적)
+            encoded_query = urllib.parse.quote(query)
+            search_url = f"{self.SEARCH_URL}?selectPdList={encoded_query}"
 
-            # 검색창에 입력
-            search_input = await self.page.wait_for_selector('input[placeholder*="상품명"]', timeout=10000)
-            await search_input.fill(query)
+            await self.page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
 
-            # 검색 버튼 클릭
-            search_button = await self.page.wait_for_selector('button:has-text("검색")', timeout=5000)
-            await search_button.click()
-
-            # 결과 대기
+            # 검색 결과 로딩 대기
             await asyncio.sleep(2)
 
             # 결과 파싱
@@ -116,22 +129,24 @@ class DaisoMallScraper:
             return products
 
         except Exception as e:
-            print(f"[에러] 검색 실패: {e}")
+            print(f"[에러] 검색 실패 ({query}): {e}")
             return []
 
     async def _parse_search_results(self, limit: int) -> List[DaisoProduct]:
-        """검색 결과 파싱"""
+        """검색 결과 파싱 (2025 업데이트)"""
         products = []
 
         try:
             # 상품 링크들 찾기 (품번이 포함된 링크)
+            # 구조: link "가격 원 상품명 품번: 품번번호"
             product_links = await self.page.query_selector_all('a[href*="pdNo="]')
 
             seen_product_nos = set()
-            for link in product_links[:limit * 2]:  # 중복 고려해서 여유있게
+            for link in product_links[:limit * 3]:  # 중복 고려해서 여유있게
                 try:
                     href = await link.get_attribute("href")
-                    text = await link.inner_text()
+                    if not href:
+                        continue
 
                     # 품번 추출
                     match = re.search(r'pdNo=(\d+)', href)
@@ -143,53 +158,66 @@ class DaisoMallScraper:
                     # 중복 체크
                     if product_no in seen_product_nos:
                         continue
-                    seen_product_nos.add(product_no)
 
-                    # 텍스트에서 정보 추출
-                    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+                    # 링크 텍스트 가져오기
+                    text = await link.inner_text()
+                    if not text or len(text.strip()) < 5:
+                        continue
 
-                    # 가격과 상품명 찾기
+                    # 텍스트 파싱
+                    # 형태: "2,000 원 실리콘용기(약250 ml) 품번: 1045439"
+                    # 또는: "2,000\n원\n실리콘용기(약250 ml)\n품번: 1045439"
+                    text = text.strip()
+
+                    # 가격 추출 (맨 앞에 있는 숫자)
                     price = 0
+                    price_match = re.search(r'^(\d{1,3}(?:,\d{3})*)', text.replace('\n', ' '))
+                    if price_match:
+                        price = int(price_match.group(1).replace(',', ''))
+
+                    # 상품명 추출 (품번: 이전, 가격 이후)
                     name = ""
+                    # "원" 이후, "품번:" 이전 부분 추출
+                    name_match = re.search(r'원\s*(.+?)\s*품번:', text.replace('\n', ' '), re.DOTALL)
+                    if name_match:
+                        name = name_match.group(1).strip()
 
-                    for line in lines:
-                        # 가격 패턴 (예: "2,000 원" 또는 "2,000")
-                        price_match = re.search(r'(\d{1,3}(?:,\d{3})*)\s*원?', line)
-                        if price_match and not name:  # 첫 번째 가격만
-                            price = int(price_match.group(1).replace(',', ''))
-                        elif not line.startswith('품번') and not re.match(r'^\d', line):
-                            if len(line) > 2 and not name:
-                                name = line
-
-                    # 품번이 있는 라인에서 이름 추출 시도
-                    for line in lines:
-                        if '품번' in line:
-                            # "상품명 품번: 123456" 형태에서 상품명 추출
-                            name_part = line.split('품번')[0].strip()
-                            if name_part:
-                                name = name_part
-                            break
-
+                    # name이 비어있으면 다른 방법 시도
                     if not name:
-                        # 마지막 시도: 가격이 아닌 첫 텍스트
+                        lines = [l.strip() for l in text.split('\n') if l.strip()]
                         for line in lines:
-                            if not re.match(r'^\d', line) and '원' not in line and '품번' not in line:
+                            # 숫자로 시작하지 않고, '원', '품번' 아닌 라인
+                            if not re.match(r'^\d', line) and line != '원' and '품번' not in line:
                                 name = line
                                 break
 
-                    if name and product_no:
-                        product_url = f"https://prdm.daisomall.co.kr/pd/pdl/SCR_PDL_0001?pdNo={product_no}"
+                    if not name or not product_no:
+                        continue
 
-                        product = DaisoProduct(
-                            product_no=product_no,
-                            name=name,
-                            price=price,
-                            product_url=product_url,
-                        )
-                        products.append(product)
+                    seen_product_nos.add(product_no)
 
-                        if len(products) >= limit:
-                            break
+                    # 이미지 URL 추출 시도
+                    image_url = ""
+                    try:
+                        img = await link.query_selector('img')
+                        if img:
+                            image_url = await img.get_attribute('src') or ""
+                    except:
+                        pass
+
+                    product_url = f"https://prdm.daisomall.co.kr/pd/pdl/SCR_PDL_0001?pdNo={product_no}"
+
+                    product = DaisoProduct(
+                        product_no=product_no,
+                        name=name,
+                        price=price,
+                        image_url=image_url,
+                        product_url=product_url,
+                    )
+                    products.append(product)
+
+                    if len(products) >= limit:
+                        break
 
                 except Exception as e:
                     continue
