@@ -1,6 +1,6 @@
 'use client'
 
-import { STORES } from '@/lib/types'
+import { STORES_ORDERED } from '@/lib/types'
 
 interface StoreFilterProps {
   selectedStore: string
@@ -11,7 +11,7 @@ interface StoreFilterProps {
 export function StoreFilter({ selectedStore, onSelectStore, counts = {} }: StoreFilterProps) {
   const stores = [
     { key: 'all', name: '전체', icon: '🏠', color: '#333' },
-    ...Object.values(STORES),
+    ...STORES_ORDERED,
   ]
 
   return (

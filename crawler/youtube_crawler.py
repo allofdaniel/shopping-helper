@@ -257,7 +257,7 @@ class YouTubeCrawler:
 
     def get_video_transcript(self, video_id: str, languages: list = None,
                                retry_count: int = 3, retry_delay: float = 2.0) -> Optional[str]:
-        """영상 자막 추출 (Rate limiting 대응)"""
+        """영상 자막 추출 (Rate limiting 대응) - youtube-transcript-api v1.2+ 지원"""
         if not TRANSCRIPT_AVAILABLE:
             return None
 
@@ -266,36 +266,41 @@ class YouTubeCrawler:
 
         for attempt in range(retry_count):
             try:
-                # 1. list_transcripts로 사용 가능한 자막 먼저 확인
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                # youtube-transcript-api v1.2+ 새 API 사용
+                api = YouTubeTranscriptApi()
 
-                # 2. 선호 언어 순서로 자막 찾기
-                transcript = None
-                for lang in languages:
-                    try:
-                        transcript = transcript_list.find_transcript([lang])
-                        break
-                    except Exception:
-                        continue
+                # 1. 먼저 사용 가능한 자막 목록 확인
+                try:
+                    transcript_list = api.list(video_id)
 
-                # 3. 없으면 자동 생성 자막 시도
-                if transcript is None:
-                    try:
-                        transcript = transcript_list.find_generated_transcript(languages)
-                    except Exception:
-                        # 아무 자막이나 가져와서 번역
-                        for t in transcript_list:
-                            try:
-                                transcript = t.translate("ko")
+                    # 2. 선호 언어 순서로 자막 찾기
+                    selected_lang = None
+                    for lang in languages:
+                        for transcript in transcript_list:
+                            if transcript.language_code == lang or transcript.language_code.startswith(lang.split('-')[0]):
+                                selected_lang = transcript.language_code
                                 break
-                            except Exception:
-                                transcript = t
-                                break
+                        if selected_lang:
+                            break
 
-                if transcript:
-                    entries = transcript.fetch()
-                    text = " ".join([entry["text"] for entry in entries])
-                    return text
+                    # 3. 선호 언어가 없으면 첫 번째 자막 사용
+                    if not selected_lang and transcript_list:
+                        selected_lang = transcript_list[0].language_code
+
+                    if selected_lang:
+                        fetched = api.fetch(video_id, languages=[selected_lang])
+                        text = " ".join([snippet.text for snippet in fetched])
+                        return text
+
+                except Exception as list_error:
+                    # list가 실패하면 직접 fetch 시도
+                    for lang in languages:
+                        try:
+                            fetched = api.fetch(video_id, languages=[lang])
+                            text = " ".join([snippet.text for snippet in fetched])
+                            return text
+                        except Exception:
+                            continue
 
             except Exception as e:
                 error_msg = str(e)

@@ -60,19 +60,20 @@ jobs:
           import sys
           sys.stdout.reconfigure(encoding='utf-8')
 
-          from pipeline import DataPipeline
+          from pipeline import ImprovedDataPipeline
 
           max_videos = int('${{ env.MAX_VIDEOS }}')
-          print(f'=== 자동 크롤링 시작 (매장당 {max_videos}개 영상) ===')
+          print(f'=== 개선된 자동 크롤링 시작 (매장당 {max_videos}개 영상) ===')
 
-          pipeline = DataPipeline()
+          pipeline = ImprovedDataPipeline()
 
           stores = ['daiso', 'costco', 'ikea', 'oliveyoung', 'convenience']
 
           for i, store in enumerate(stores, 1):
               print(f'\n[{i}/{len(stores)}] {store} 크롤링...')
               try:
-                  pipeline.run_full_pipeline(store, max_videos=max_videos)
+                  result = pipeline.run_full_pipeline(store, max_videos=max_videos)
+                  print(f'  -> 추출: {result.get(\"products_extracted\", 0)}개, 매칭: {result.get(\"products_matched\", 0)}개')
               except Exception as e:
                   print(f'  {store} 크롤링 실패: {e}')
                   continue

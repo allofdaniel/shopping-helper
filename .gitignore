@@ -39,3 +39,7 @@ __pycache__/
 *.pyc
 .env
 data/
+.playwright-mcp/
+null_price_products.txt
+tools/
+crawler/improved_products.json

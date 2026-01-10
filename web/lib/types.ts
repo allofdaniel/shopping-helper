@@ -77,15 +77,24 @@ export interface Stats {
   by_category: Record<string, number>
 }
 
+// 매장 표시 순서 (중요도 순)
+const STORE_ORDER = ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'cu', 'gs25', 'seveneleven', 'emart24', 'coupang'] as const
+
 export const STORES: Record<string, Store> = {
   daiso: { key: 'daiso', name: '다이소', icon: '🏪', color: '#FF6B35', count: 0 },
   costco: { key: 'costco', name: '코스트코', icon: '🛒', color: '#E31837', count: 0 },
-  traders: { key: 'traders', name: '트레이더스', icon: '🏬', color: '#004D9B', count: 0 },
   ikea: { key: 'ikea', name: '이케아', icon: '🪑', color: '#0051BA', count: 0 },
   oliveyoung: { key: 'oliveyoung', name: '올리브영', icon: '💄', color: '#009A3D', count: 0 },
-  convenience: { key: 'convenience', name: '편의점', icon: '🏪', color: '#FFA500', count: 0 },
+  traders: { key: 'traders', name: '트레이더스', icon: '🏬', color: '#004D9B', count: 0 },
+  cu: { key: 'cu', name: 'CU', icon: '🟣', color: '#6B2D8A', count: 0 },
+  gs25: { key: 'gs25', name: 'GS25', icon: '🔵', color: '#0063C1', count: 0 },
+  seveneleven: { key: 'seveneleven', name: '세븐일레븐', icon: '🟢', color: '#00A656', count: 0 },
+  emart24: { key: 'emart24', name: '이마트24', icon: '🟡', color: '#FFB800', count: 0 },
   coupang: { key: 'coupang', name: '쿠팡', icon: '📦', color: '#E4002B', count: 0 },
 }
+
+// 정렬된 매장 목록
+export const STORES_ORDERED = STORE_ORDER.map(key => STORES[key])
 
 export const CATEGORIES: Record<string, Category> = {
   food: { key: 'food', name: '식품', icon: '🍽️', count: 0 },

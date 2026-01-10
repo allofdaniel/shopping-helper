@@ -34,6 +34,14 @@ const getStoreSearchUrl = (storeKey: string, query: string): string | null => {
       return `https://www.oliveyoung.co.kr/store/search/getSearchMain.do?query=${encodedQuery}`
     case 'artbox':
       return `https://www.artbox.co.kr/search?q=${encodedQuery}`
+    case 'cu':
+      return `https://cu.bgfretail.com/product/search.do?searchKeyword=${encodedQuery}`
+    case 'gs25':
+      return `https://gs25.gsretail.com/gscvs/ko/products/search?keyword=${encodedQuery}`
+    case 'seveneleven':
+      return `https://www.7-eleven.co.kr/product/search.asp?keyword=${encodedQuery}`
+    case 'emart24':
+      return `https://emart24.co.kr/product/search?keyword=${encodedQuery}`
     default:
       return null
   }
@@ -63,8 +71,8 @@ export function ShoppingMode({
       groups[key].push(p)
     })
 
-    // 매장별 정렬 (다이소 > 코스트코 > 이케아 순)
-    const order = ['daiso', 'costco', 'ikea', 'oliveyoung', 'artbox']
+    // 매장별 정렬
+    const order = ['daiso', 'costco', 'ikea', 'oliveyoung', 'cu', 'gs25', 'seveneleven', 'emart24', 'convenience', 'artbox']
     const sorted = Object.entries(groups).sort(([a], [b]) => {
       return order.indexOf(a) - order.indexOf(b)
     })

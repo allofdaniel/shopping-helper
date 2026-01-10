@@ -36,6 +36,7 @@ export const ProductCard = memo(function ProductCard({
   const [imgError, setImgError] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
+  const [showVideo, setShowVideo] = useState(false)
 
   const imageUrl = product.official_image_url && !imgError
     ? product.official_image_url
@@ -90,6 +91,7 @@ export const ProductCard = memo(function ProductCard({
   const handleCloseDetail = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setShowDetail(false)
+    setShowVideo(false) // 영상도 멈춤
   }, [])
 
   // 찜하기 토글
@@ -336,24 +338,51 @@ export const ProductCard = memo(function ProductCard({
               </div>
             </div>
 
-            {/* 상품 이미지 */}
+            {/* 상품 이미지 / 영상 */}
             <div className="relative aspect-video bg-gray-100 dark:bg-gray-800">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={product.name}
-                  className="w-full h-full object-contain"
+              {showVideo ? (
+                // YouTube 임베드 플레이어
+                <iframe
+                  src={`https://www.youtube.com/embed/${product.video_id}?autoplay=1&start=${product.timestamp_sec || 0}`}
+                  title={product.video_title || product.name}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
                 />
-              ) : (
+              ) : imageUrl ? (
                 <div className="relative w-full h-full">
+                  <img
+                    src={imageUrl}
+                    alt={product.name}
+                    className="w-full h-full object-contain"
+                  />
+                  {/* 영상 재생 버튼 오버레이 */}
+                  <button
+                    onClick={() => setShowVideo(true)}
+                    className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg"
+                  >
+                    <Play className="w-4 h-4" fill="white" />
+                    영상 보기
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="relative w-full h-full cursor-pointer"
+                  onClick={() => setShowVideo(true)}
+                >
                   <img
                     src={getYoutubeThumbnail(product.video_id)}
                     alt={product.name}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                    <Play className="w-16 h-16 text-white opacity-80" fill="white" />
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center hover:bg-black/40 transition-colors">
+                    <div className="bg-red-600 rounded-full p-4">
+                      <Play className="w-10 h-10 text-white" fill="white" />
+                    </div>
                   </div>
+                  <span className="absolute bottom-2 left-2 text-white text-xs bg-black/70 px-2 py-1 rounded">
+                    클릭하여 영상 재생
+                  </span>
                 </div>
               )}
             </div>
@@ -524,35 +553,56 @@ export const ProductCard = memo(function ProductCard({
               {/* CTA 버튼 - Fitts's Law: 큰 터치 영역 (최소 48px) */}
               {/* Hick's Law: 핵심 액션 2개만 표시 */}
               <div className="flex gap-3 pt-3 sticky bottom-0 bg-white dark:bg-gray-900 pb-2">
+                {/* 영상 재생/멈춤 토글 버튼 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowVideo(!showVideo)
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-base font-bold transition-all shadow-lg ${
+                    showVideo
+                      ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                      : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
+                  }`}
+                >
+                  <Play className="w-5 h-5" fill="white" />
+                  {showVideo ? '영상 멈춤' : '영상 재생'}
+                  {!showVideo && timestampDisplay && <span className="text-red-200 text-sm">({timestampDisplay})</span>}
+                </button>
+
+                {/* 장바구니 담기 버튼 */}
+                {onToggleWishlist && (
+                  <button
+                    onClick={handleWishlistToggle}
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-base font-bold transition-all shadow-lg ${
+                      isInWishlist
+                        ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/25'
+                        : 'bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white shadow-orange-500/25'
+                    }`}
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    {isInWishlist ? '장바구니에서 빼기' : '장바구니 담기'}
+                  </button>
+                )}
+              </div>
+
+              {/* 온라인 구매 링크 (있을 때만) */}
+              {hasOfficialInfo && (
                 <a
-                  href={getYoutubeVideoUrl(product.video_id, product.timestamp_sec || 0)}
+                  href={product.official_product_url!}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-4 rounded-xl text-base font-bold transition-all shadow-lg shadow-red-500/25"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border-2"
+                  style={{
+                    borderColor: store?.color || '#666',
+                    color: store?.color || '#666'
+                  }}
                 >
-                  <Play className="w-5 h-5" fill="white" />
-                  영상 보기
-                  {timestampDisplay && <span className="text-red-200 text-sm">({timestampDisplay})</span>}
+                  <ExternalLink className="w-4 h-4" />
+                  온라인 매장에서 보기
                 </a>
-
-                {hasOfficialInfo && (
-                  <a
-                    href={product.official_product_url!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex-1 flex items-center justify-center gap-2 text-white py-4 rounded-xl text-base font-bold transition-all shadow-lg"
-                    style={{
-                      background: `linear-gradient(135deg, ${store?.color || '#666'}, ${store?.color || '#666'}dd)`,
-                      boxShadow: `0 10px 25px -5px ${store?.color}44`
-                    }}
-                  >
-                    <ShoppingCart className="w-5 h-5" />
-                    구매하기
-                  </a>
-                )}
-              </div>
+              )}
 
               {/* 공식 상품 링크 (없을 때 대체) */}
               {!hasOfficialInfo && (
