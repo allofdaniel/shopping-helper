@@ -115,14 +115,30 @@ class DaisoMallScraper:
             await self._init_browser()
 
         try:
-            # URL 인코딩된 검색어로 직접 이동 (더 안정적)
+            # URL 인코딩된 검색어로 직접 이동 (tab=tab2 추가 - 매장 상품 찾기 탭)
             encoded_query = urllib.parse.quote(query)
-            search_url = f"{self.SEARCH_URL}?selectPdList={encoded_query}"
+            search_url = f"{self.SEARCH_URL}?tab=tab2&selectPdList={encoded_query}"
 
             await self.page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
 
-            # 검색 결과 로딩 대기
-            await asyncio.sleep(2)
+            # 검색 결과 로딩 대기 (JavaScript 렌더링 시간 필요)
+            await asyncio.sleep(3)
+
+            # 혹시 검색 결과가 없으면 검색창 직접 입력 시도
+            links = await self.page.query_selector_all('a[href*="pdNo="]')
+            if not links:
+                # 검색창 찾아서 입력
+                try:
+                    search_input = await self.page.wait_for_selector(
+                        'input[placeholder*="상품명"], input[placeholder*="품번"]',
+                        timeout=5000
+                    )
+                    if search_input:
+                        await search_input.fill(query)
+                        await search_input.press('Enter')
+                        await asyncio.sleep(3)
+                except:
+                    pass
 
             # 결과 파싱
             products = await self._parse_search_results(limit)
