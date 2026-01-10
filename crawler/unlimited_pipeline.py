@@ -15,12 +15,16 @@ YouTube API 쿼터 제한 없이 대량 수집 가능
 
     # 서버 데몬 모드 (주기적 실행)
     python unlimited_pipeline.py --daemon --interval 3600
+
+    # 카탈로그만 크롤링 (다이소몰)
+    python unlimited_pipeline.py --catalog-only
 """
 import argparse
+import asyncio
 import time
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 try:
@@ -36,6 +40,30 @@ from improved_product_matcher import ImprovedProductMatcher
 from improved_database import ImprovedDatabase
 from config import STORE_CATEGORIES, CRAWL_CONFIG
 
+# 카탈로그 크롤러
+try:
+    from daiso_mall_scraper import DaisoMallScraper, PLAYWRIGHT_AVAILABLE
+    CATALOG_CRAWLER_AVAILABLE = PLAYWRIGHT_AVAILABLE
+except ImportError:
+    CATALOG_CRAWLER_AVAILABLE = False
+
+# 카탈로그 크롤링 설정
+CATALOG_CONFIG = {
+    "daiso": {
+        "enabled": True,
+        "crawler_class": "DaisoMallScraper",
+        "categories": [
+            "생활용품", "주방용품", "욕실용품", "청소용품",
+            "수납정리", "인테리어", "문구팬시", "파티용품",
+        ],
+        "keywords": [
+            "실리콘", "수세미", "배수구", "정리함", "밀폐용기",
+            "행거", "후크", "수납", "바구니", "트레이",
+        ],
+        "update_interval_hours": 24,  # 카탈로그 업데이트 주기
+    },
+}
+
 
 class UnlimitedPipeline:
     """무제한 데이터 파이프라인 (yt-dlp 기반)"""
@@ -48,11 +76,13 @@ class UnlimitedPipeline:
         if not YTDLP_AVAILABLE:
             raise ImportError("yt-dlp가 필요합니다. pip install yt-dlp")
 
-        self.crawler = YTDLPCrawler()
+        self.db = ImprovedDatabase()
+
+        # yt-dlp 크롤러에 DB 연결 (중복 체크용)
+        self.crawler = YTDLPCrawler(db=self.db)
         self.validator = TranscriptValidator()
         self.extractor = None
         self.matcher = None
-        self.db = ImprovedDatabase()
         self.use_daiso_enricher = use_daiso_enricher
 
         self._init_ai()
@@ -74,8 +104,122 @@ class UnlimitedPipeline:
                 print(f"[OK] 상품 매칭기 준비됨 (카탈로그: {len(catalog)}개)")
             else:
                 print("[!] 카탈로그 없음 - 매칭 스킵됨")
+                if CATALOG_CRAWLER_AVAILABLE:
+                    print("    -> 'python unlimited_pipeline.py --catalog-only' 로 카탈로그 수집 필요")
         except Exception as e:
             print(f"[!] 매칭기 초기화 실패: {e}")
+
+    async def crawl_catalog_async(self, store_key: str = "daiso") -> Dict:
+        """
+        매장 카탈로그 크롤링 (비동기)
+
+        Args:
+            store_key: 매장 키
+
+        Returns:
+            크롤링 결과 통계
+        """
+        if not CATALOG_CRAWLER_AVAILABLE:
+            return {"error": "Playwright가 설치되어 있지 않습니다"}
+
+        if store_key not in CATALOG_CONFIG:
+            return {"error": f"지원하지 않는 매장: {store_key}"}
+
+        config = CATALOG_CONFIG[store_key]
+        if not config.get("enabled"):
+            return {"error": f"{store_key} 카탈로그 크롤링 비활성화"}
+
+        print(f"\n{'='*60}")
+        print(f"[카탈로그 크롤링] {store_key} 시작")
+        print(f"{'='*60}")
+
+        stats = {
+            "store": store_key,
+            "products_crawled": 0,
+            "products_saved": 0,
+            "errors": [],
+        }
+
+        if store_key == "daiso":
+            from daiso_mall_scraper import DaisoMallScraper
+
+            scraper = DaisoMallScraper(headless=True)
+
+            try:
+                all_products = []
+
+                # 키워드별 검색
+                keywords = config.get("keywords", [])
+                print(f"\n검색 키워드: {len(keywords)}개")
+
+                for keyword in keywords:
+                    print(f"  검색: '{keyword}'")
+                    try:
+                        products = await scraper.search_products(keyword, limit=30)
+                        stats["products_crawled"] += len(products)
+
+                        for p in products:
+                            all_products.append(p)
+                            print(f"    - {p.name}: {p.price}원 (품번: {p.product_no})")
+
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{keyword}: {e}")
+
+                    await asyncio.sleep(2)  # 사이트 부하 방지
+
+                # 카테고리별 검색
+                categories = config.get("categories", [])
+                print(f"\n카테고리 검색: {len(categories)}개")
+
+                for category in categories:
+                    print(f"  카테고리: '{category}'")
+                    try:
+                        products = await scraper.search_products(category, limit=50)
+                        stats["products_crawled"] += len(products)
+
+                        for p in products:
+                            all_products.append(p)
+
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{category}: {e}")
+
+                    await asyncio.sleep(2)
+
+                # 중복 제거 및 DB 저장
+                seen_product_nos = set()
+                for p in all_products:
+                    if p.product_no not in seen_product_nos:
+                        seen_product_nos.add(p.product_no)
+                        product_dict = {
+                            "product_no": p.product_no,
+                            "name": p.name,
+                            "price": p.price,
+                            "image_url": p.image_url,
+                            "product_url": p.product_url,
+                            "category": p.category,
+                        }
+                        if self.db.insert_daiso_product(product_dict):
+                            stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장 (중복 제외)")
+
+                # 매처 카탈로그 새로고침
+                catalog = self.db.get_daiso_catalog_all()
+                if catalog and self.matcher:
+                    self.matcher.set_catalog(catalog)
+                    print(f"매칭기 카탈로그 업데이트: {len(catalog)}개")
+
+            finally:
+                await scraper.close()
+
+        return stats
+
+    def crawl_catalog(self, store_key: str = "daiso") -> Dict:
+        """카탈로그 크롤링 (동기 wrapper)"""
+        return asyncio.run(self.crawl_catalog_async(store_key))
 
     def run(self, store_key: str = "daiso", max_videos: int = 50,
             max_per_channel: int = 20, max_per_search: int = 10,
@@ -313,29 +457,53 @@ class UnlimitedPipeline:
 
         return results
 
-    def run_daemon(self, interval_seconds: int = 3600, stores: List[str] = None):
+    def run_daemon(self, interval_seconds: int = 3600, stores: List[str] = None,
+                   catalog_interval_hours: int = 24):
         """
         데몬 모드 - 주기적으로 수집 실행
 
         Args:
-            interval_seconds: 실행 간격 (초)
+            interval_seconds: 영상 수집 간격 (초)
             stores: 수집할 매장 목록 (None이면 전체)
+            catalog_interval_hours: 카탈로그 크롤링 간격 (시간)
         """
         if stores is None:
             stores = list(STORE_CATEGORIES.keys())
 
         print(f"\n=== 데몬 모드 시작 ===")
         print(f"수집 대상: {', '.join(stores)}")
-        print(f"실행 간격: {interval_seconds}초 ({interval_seconds/3600:.1f}시간)")
+        print(f"영상 수집 간격: {interval_seconds}초 ({interval_seconds/3600:.1f}시간)")
+        print(f"카탈로그 업데이트 간격: {catalog_interval_hours}시간")
         print(f"종료: Ctrl+C")
 
         run_count = 0
+        last_catalog_crawl = None
+
         while True:
             run_count += 1
             print(f"\n{'='*60}")
             print(f"[실행 #{run_count}] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"{'='*60}")
 
+            # 카탈로그 업데이트 체크 (주기적으로)
+            if CATALOG_CRAWLER_AVAILABLE:
+                should_crawl_catalog = False
+                if last_catalog_crawl is None:
+                    should_crawl_catalog = True
+                elif datetime.now() - last_catalog_crawl > timedelta(hours=catalog_interval_hours):
+                    should_crawl_catalog = True
+
+                if should_crawl_catalog:
+                    print("\n[카탈로그 업데이트 시작]")
+                    for store_key in stores:
+                        if store_key in CATALOG_CONFIG:
+                            try:
+                                self.crawl_catalog(store_key)
+                            except Exception as e:
+                                print(f"[에러] 카탈로그 크롤링 실패 ({store_key}): {e}")
+                    last_catalog_crawl = datetime.now()
+
+            # 영상 수집
             for store_key in stores:
                 try:
                     self.run(store_key, max_videos=20)
@@ -354,10 +522,26 @@ def main():
     parser.add_argument('--max-per-channel', type=int, default=20, help='채널당 최대 영상 수')
     parser.add_argument('--daemon', action='store_true', help='데몬 모드 (주기적 실행)')
     parser.add_argument('--interval', type=int, default=3600, help='데몬 실행 간격 (초)')
+    parser.add_argument('--catalog-only', action='store_true', help='카탈로그만 크롤링')
+    parser.add_argument('--with-catalog', action='store_true', help='카탈로그 크롤링 후 영상 수집')
 
     args = parser.parse_args()
 
     pipeline = UnlimitedPipeline()
+
+    # 카탈로그만 크롤링
+    if args.catalog_only:
+        if not CATALOG_CRAWLER_AVAILABLE:
+            print("[에러] Playwright가 설치되어 있지 않습니다")
+            print("       pip install playwright && playwright install chromium")
+            sys.exit(1)
+        pipeline.crawl_catalog(args.store)
+        return
+
+    # 카탈로그 먼저 크롤링 후 영상 수집
+    if args.with_catalog and CATALOG_CRAWLER_AVAILABLE:
+        print("\n[Step 0] 카탈로그 크롤링...")
+        pipeline.crawl_catalog(args.store)
 
     if args.daemon:
         stores = None if args.all else [args.store]

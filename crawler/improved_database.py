@@ -312,6 +312,18 @@ class ImprovedDatabase:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_all_video_ids(self) -> List[str]:
+        """모든 영상 ID 조회 (중복 체크용)"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT video_id FROM videos")
+        return [row[0] for row in cursor.fetchall()]
+
+    def video_exists(self, video_id: str) -> bool:
+        """영상 존재 여부 확인"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT 1 FROM videos WHERE video_id = ? LIMIT 1", (video_id,))
+        return cursor.fetchone() is not None
+
     # ========== 상품 관련 ==========
 
     def insert_product(self, product: dict) -> Optional[int]:
