@@ -4,18 +4,86 @@
 - UNIQUE 제약조건 추가 (video_id, name, price)
 - 중복 삽입 방지
 - 품질 메트릭 추가
+- 제너릭 카탈로그 insert 메서드
 """
 import sqlite3
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 try:
     from config import DB_PATH, DATA_DIR
 except ImportError:
     DATA_DIR = Path(__file__).parent.parent / "data"
     DB_PATH = DATA_DIR / "products.db"
+
+
+# 카탈로그 테이블 설정 (제너릭 insert를 위한 매핑)
+CATALOG_CONFIG: Dict[str, Dict[str, Any]] = {
+    "daiso": {
+        "table": "daiso_catalog",
+        "id_column": "product_no",
+        "columns": ["product_no", "name", "price", "image_url", "product_url", "category",
+                    "category_large", "category_middle", "category_small",
+                    "rating", "review_count", "order_count", "is_new", "is_best", "sold_out", "keywords"],
+        "update_columns": ["name", "price", "image_url", "rating", "review_count",
+                           "order_count", "is_new", "is_best", "sold_out"],
+        "bool_columns": ["is_new", "is_best", "sold_out"],
+    },
+    "costco": {
+        "table": "costco_catalog",
+        "id_column": "product_code",
+        "columns": ["product_code", "name", "price", "image_url", "product_url", "category",
+                    "unit_price", "rating", "review_count", "keywords"],
+        "update_columns": ["name", "price", "image_url", "product_url", "unit_price", "rating", "review_count"],
+        "bool_columns": [],
+    },
+    "oliveyoung": {
+        "table": "oliveyoung_catalog",
+        "id_column": "product_code",
+        "columns": ["product_code", "name", "brand", "price", "original_price", "image_url",
+                    "product_url", "category", "rating", "review_count", "is_best", "is_sale", "keywords"],
+        "update_columns": ["name", "brand", "price", "original_price", "image_url", "product_url",
+                           "rating", "review_count", "is_best", "is_sale"],
+        "bool_columns": ["is_best", "is_sale"],
+    },
+    "coupang": {
+        "table": "coupang_catalog",
+        "id_column": "product_id",
+        "columns": ["product_id", "name", "price", "original_price", "image_url", "product_url",
+                    "category", "rating", "review_count", "is_rocket", "is_rocket_fresh", "seller", "keywords"],
+        "update_columns": ["name", "price", "original_price", "image_url", "product_url",
+                           "rating", "review_count", "is_rocket", "is_rocket_fresh", "seller"],
+        "bool_columns": ["is_rocket", "is_rocket_fresh"],
+    },
+    "traders": {
+        "table": "traders_catalog",
+        "id_column": "item_id",
+        "columns": ["item_id", "name", "brand", "price", "original_price", "image_url",
+                    "product_url", "category", "unit_price", "keywords"],
+        "update_columns": ["name", "brand", "price", "original_price", "image_url", "product_url", "unit_price"],
+        "bool_columns": [],
+    },
+    "ikea": {
+        "table": "ikea_catalog",
+        "id_column": "product_id",
+        "columns": ["product_id", "name", "type_name", "price", "image_url", "product_url",
+                    "category", "color", "size", "rating", "review_count", "keywords"],
+        "update_columns": ["name", "type_name", "price", "image_url", "product_url",
+                           "rating", "review_count"],
+        "bool_columns": [],
+    },
+    "convenience": {
+        "table": "convenience_catalog",
+        "id_column": "product_id",  # + store (복합키)
+        "columns": ["product_id", "store", "name", "price", "original_price", "image_url",
+                    "product_url", "category", "event_type", "is_new", "is_pb", "keywords"],
+        "update_columns": ["name", "price", "original_price", "image_url", "event_type", "is_new"],
+        "bool_columns": ["is_new", "is_pb"],
+        "composite_key": ["product_id", "store"],
+    },
+}
 
 
 class ImprovedDatabase:
@@ -545,6 +613,145 @@ class ImprovedDatabase:
         secs = seconds % 60
         return f"{minutes}:{secs:02d}"
 
+    # ========== 제너릭 카탈로그 메서드 ==========
+
+    def insert_catalog_product(self, store_key: str, product: dict) -> bool:
+        """
+        제너릭 카탈로그 상품 저장 (upsert)
+
+        Args:
+            store_key: 매장 키 (daiso, costco, oliveyoung, coupang, traders, ikea, convenience)
+            product: 상품 데이터 딕셔너리
+
+        Returns:
+            성공 여부
+        """
+        config = CATALOG_CONFIG.get(store_key)
+        if not config:
+            print(f"알 수 없는 매장: {store_key}")
+            return False
+
+        cursor = self.conn.cursor()
+        table = config["table"]
+        columns = config["columns"]
+        update_columns = config["update_columns"]
+        bool_columns = config.get("bool_columns", [])
+
+        # 값 추출 및 bool 변환
+        values = []
+        for col in columns:
+            val = product.get(col, "" if col == "keywords" else None)
+            if col in bool_columns:
+                val = 1 if val else 0
+            elif val is None and col not in ["price", "original_price", "rating", "review_count"]:
+                val = ""
+            values.append(val)
+
+        # ON CONFLICT 절 생성
+        if config.get("composite_key"):
+            conflict_cols = ", ".join(config["composite_key"])
+        else:
+            conflict_cols = config["id_column"]
+
+        update_set = ", ".join([f"{col} = excluded.{col}" for col in update_columns])
+        update_set += ", updated_at = CURRENT_TIMESTAMP"
+
+        placeholders = ", ".join(["?"] * len(columns))
+        columns_str = ", ".join(columns)
+
+        query = f"""
+            INSERT INTO {table}
+            ({columns_str}, updated_at)
+            VALUES ({placeholders}, CURRENT_TIMESTAMP)
+            ON CONFLICT({conflict_cols}) DO UPDATE SET
+                {update_set}
+        """
+
+        try:
+            cursor.execute(query, values)
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"{store_key} 상품 저장 오류: {e}")
+            return False
+
+    def insert_catalog_products_batch(self, store_key: str, products: List[dict]) -> int:
+        """
+        카탈로그 상품 배치 저장
+
+        Args:
+            store_key: 매장 키
+            products: 상품 리스트
+
+        Returns:
+            저장된 상품 수
+        """
+        count = 0
+        for product in products:
+            if self.insert_catalog_product(store_key, product):
+                count += 1
+        return count
+
+    def search_catalog(self, store_key: str, keyword: str, limit: int = 20) -> list:
+        """
+        카탈로그 검색
+
+        Args:
+            store_key: 매장 키
+            keyword: 검색 키워드
+            limit: 결과 제한
+
+        Returns:
+            검색 결과 리스트
+        """
+        config = CATALOG_CONFIG.get(store_key)
+        if not config:
+            return []
+
+        cursor = self.conn.cursor()
+        table = config["table"]
+        search_term = f"%{keyword}%"
+
+        # 브랜드 컬럼이 있으면 포함
+        if "brand" in config["columns"]:
+            query = f"""
+                SELECT * FROM {table}
+                WHERE name LIKE ? OR brand LIKE ? OR keywords LIKE ?
+                ORDER BY review_count DESC
+                LIMIT ?
+            """
+            cursor.execute(query, (search_term, search_term, search_term, limit))
+        else:
+            query = f"""
+                SELECT * FROM {table}
+                WHERE name LIKE ? OR keywords LIKE ?
+                ORDER BY review_count DESC
+                LIMIT ?
+            """
+            cursor.execute(query, (search_term, search_term, limit))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_catalog_all(self, store_key: str) -> list:
+        """카탈로그 전체 조회"""
+        config = CATALOG_CONFIG.get(store_key)
+        if not config:
+            return []
+
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {config['table']} ORDER BY updated_at DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_catalog_count(self, store_key: str) -> int:
+        """카탈로그 상품 수 조회"""
+        config = CATALOG_CONFIG.get(store_key)
+        if not config:
+            return 0
+
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM {config['table']}")
+        return cursor.fetchone()[0]
+
     def get_products_by_store(self, store_key: str, approved_only: bool = True,
                                limit: int = 100, offset: int = 0) -> list:
         """매장별 상품 조회"""
@@ -666,397 +873,102 @@ class ImprovedDatabase:
         row = cursor.fetchone()
         return dict(row) if row else {}
 
-    # ========== 다이소 카탈로그 ==========
+    # ========== 다이소 카탈로그 (하위 호환) ==========
 
     def insert_daiso_product(self, product: dict) -> bool:
-        """다이소몰 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO daiso_catalog
-                (product_no, name, price, image_url, product_url, category,
-                 category_large, category_middle, category_small,
-                 rating, review_count, order_count, is_new, is_best, sold_out, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(product_no) DO UPDATE SET
-                    name = excluded.name,
-                    price = excluded.price,
-                    image_url = excluded.image_url,
-                    rating = excluded.rating,
-                    review_count = excluded.review_count,
-                    order_count = excluded.order_count,
-                    is_new = excluded.is_new,
-                    is_best = excluded.is_best,
-                    sold_out = excluded.sold_out,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("product_no"),
-                product.get("name"),
-                product.get("price"),
-                product.get("image_url"),
-                product.get("product_url"),
-                product.get("category"),
-                product.get("category_large"),
-                product.get("category_middle"),
-                product.get("category_small"),
-                product.get("rating", 0),
-                product.get("review_count", 0),
-                product.get("order_count", 0),
-                1 if product.get("is_new") else 0,
-                1 if product.get("is_best") else 0,
-                1 if product.get("sold_out") else 0,
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"다이소 상품 저장 오류: {e}")
-            return False
+        """다이소몰 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("daiso", product)
 
     def search_daiso_catalog(self, keyword: str, limit: int = 20) -> list:
         """다이소 카탈로그에서 상품 검색"""
-        cursor = self.conn.cursor()
-        search_term = f"%{keyword}%"
-        cursor.execute("""
-            SELECT * FROM daiso_catalog
-            WHERE name LIKE ? OR keywords LIKE ?
-            ORDER BY order_count DESC
-            LIMIT ?
-        """, (search_term, search_term, limit))
-        return [dict(row) for row in cursor.fetchall()]
+        return self.search_catalog("daiso", keyword, limit)
 
     def get_daiso_catalog_all(self) -> list:
         """다이소 카탈로그 전체 조회"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM daiso_catalog ORDER BY order_count DESC")
-        return [dict(row) for row in cursor.fetchall()]
+        return self.get_catalog_all("daiso")
 
-    # ========== 코스트코 카탈로그 ==========
+    # ========== 코스트코 카탈로그 (하위 호환) ==========
 
     def insert_costco_product(self, product: dict) -> bool:
-        """코스트코 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO costco_catalog
-                (product_code, name, price, image_url, product_url, category,
-                 unit_price, rating, review_count, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(product_code) DO UPDATE SET
-                    name = excluded.name,
-                    price = excluded.price,
-                    image_url = excluded.image_url,
-                    product_url = excluded.product_url,
-                    unit_price = excluded.unit_price,
-                    rating = excluded.rating,
-                    review_count = excluded.review_count,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("product_code"),
-                product.get("name"),
-                product.get("price"),
-                product.get("image_url"),
-                product.get("product_url"),
-                product.get("category", ""),
-                product.get("unit_price", ""),
-                product.get("rating", 0),
-                product.get("review_count", 0),
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"코스트코 상품 저장 오류: {e}")
-            return False
+        """코스트코 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("costco", product)
 
     def search_costco_catalog(self, keyword: str, limit: int = 20) -> list:
         """코스트코 카탈로그에서 상품 검색"""
-        cursor = self.conn.cursor()
-        search_term = f"%{keyword}%"
-        cursor.execute("""
-            SELECT * FROM costco_catalog
-            WHERE name LIKE ? OR keywords LIKE ?
-            ORDER BY review_count DESC
-            LIMIT ?
-        """, (search_term, search_term, limit))
-        return [dict(row) for row in cursor.fetchall()]
+        return self.search_catalog("costco", keyword, limit)
 
     def get_costco_catalog_all(self) -> list:
         """코스트코 카탈로그 전체 조회"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM costco_catalog ORDER BY review_count DESC")
-        return [dict(row) for row in cursor.fetchall()]
+        return self.get_catalog_all("costco")
 
     def get_costco_catalog_count(self) -> int:
         """코스트코 카탈로그 상품 수"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM costco_catalog")
-        return cursor.fetchone()[0]
+        return self.get_catalog_count("costco")
 
-    # ========== 올리브영 카탈로그 ==========
+    # ========== 올리브영 카탈로그 (하위 호환) ==========
 
     def insert_oliveyoung_product(self, product: dict) -> bool:
-        """올리브영 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO oliveyoung_catalog
-                (product_code, name, brand, price, original_price, image_url, product_url,
-                 category, rating, review_count, is_best, is_sale, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(product_code) DO UPDATE SET
-                    name = excluded.name,
-                    brand = excluded.brand,
-                    price = excluded.price,
-                    original_price = excluded.original_price,
-                    image_url = excluded.image_url,
-                    product_url = excluded.product_url,
-                    rating = excluded.rating,
-                    review_count = excluded.review_count,
-                    is_best = excluded.is_best,
-                    is_sale = excluded.is_sale,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("product_code"),
-                product.get("name"),
-                product.get("brand", ""),
-                product.get("price"),
-                product.get("original_price", 0),
-                product.get("image_url"),
-                product.get("product_url"),
-                product.get("category", ""),
-                product.get("rating", 0),
-                product.get("review_count", 0),
-                1 if product.get("is_best") else 0,
-                1 if product.get("is_sale") else 0,
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"올리브영 상품 저장 오류: {e}")
-            return False
+        """올리브영 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("oliveyoung", product)
 
     def search_oliveyoung_catalog(self, keyword: str, limit: int = 20) -> list:
         """올리브영 카탈로그에서 상품 검색"""
-        cursor = self.conn.cursor()
-        search_term = f"%{keyword}%"
-        cursor.execute("""
-            SELECT * FROM oliveyoung_catalog
-            WHERE name LIKE ? OR brand LIKE ? OR keywords LIKE ?
-            ORDER BY review_count DESC
-            LIMIT ?
-        """, (search_term, search_term, search_term, limit))
-        return [dict(row) for row in cursor.fetchall()]
+        return self.search_catalog("oliveyoung", keyword, limit)
 
     def get_oliveyoung_catalog_all(self) -> list:
         """올리브영 카탈로그 전체 조회"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM oliveyoung_catalog ORDER BY review_count DESC")
-        return [dict(row) for row in cursor.fetchall()]
+        return self.get_catalog_all("oliveyoung")
 
     def get_oliveyoung_catalog_count(self) -> int:
         """올리브영 카탈로그 상품 수"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM oliveyoung_catalog")
-        return cursor.fetchone()[0]
+        return self.get_catalog_count("oliveyoung")
 
-    # ========== 쿠팡 카탈로그 ==========
+    # ========== 쿠팡 카탈로그 (하위 호환) ==========
 
     def insert_coupang_product(self, product: dict) -> bool:
-        """쿠팡 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO coupang_catalog
-                (product_id, name, price, original_price, image_url, product_url,
-                 category, rating, review_count, is_rocket, is_rocket_fresh, seller, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(product_id) DO UPDATE SET
-                    name = excluded.name,
-                    price = excluded.price,
-                    original_price = excluded.original_price,
-                    image_url = excluded.image_url,
-                    product_url = excluded.product_url,
-                    rating = excluded.rating,
-                    review_count = excluded.review_count,
-                    is_rocket = excluded.is_rocket,
-                    is_rocket_fresh = excluded.is_rocket_fresh,
-                    seller = excluded.seller,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("product_id"),
-                product.get("name"),
-                product.get("price"),
-                product.get("original_price", 0),
-                product.get("image_url"),
-                product.get("product_url"),
-                product.get("category", ""),
-                product.get("rating", 0),
-                product.get("review_count", 0),
-                1 if product.get("is_rocket") else 0,
-                1 if product.get("is_rocket_fresh") else 0,
-                product.get("seller", ""),
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"쿠팡 상품 저장 오류: {e}")
-            return False
+        """쿠팡 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("coupang", product)
 
     def search_coupang_catalog(self, keyword: str, limit: int = 20) -> list:
         """쿠팡 카탈로그에서 상품 검색"""
-        cursor = self.conn.cursor()
-        search_term = f"%{keyword}%"
-        cursor.execute("""
-            SELECT * FROM coupang_catalog
-            WHERE name LIKE ? OR keywords LIKE ?
-            ORDER BY review_count DESC
-            LIMIT ?
-        """, (search_term, search_term, limit))
-        return [dict(row) for row in cursor.fetchall()]
+        return self.search_catalog("coupang", keyword, limit)
 
     def get_coupang_catalog_all(self) -> list:
         """쿠팡 카탈로그 전체 조회"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM coupang_catalog ORDER BY review_count DESC")
-        return [dict(row) for row in cursor.fetchall()]
+        return self.get_catalog_all("coupang")
 
     def get_coupang_catalog_count(self) -> int:
         """쿠팡 카탈로그 상품 수"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM coupang_catalog")
-        return cursor.fetchone()[0]
+        return self.get_catalog_count("coupang")
 
-    # ========== 트레이더스 카탈로그 ==========
+    # ========== 트레이더스 카탈로그 (하위 호환) ==========
 
     def insert_traders_product(self, product: dict) -> bool:
-        """트레이더스 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO traders_catalog
-                (item_id, name, brand, price, original_price, image_url, product_url,
-                 category, unit_price, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(item_id) DO UPDATE SET
-                    name = excluded.name,
-                    brand = excluded.brand,
-                    price = excluded.price,
-                    original_price = excluded.original_price,
-                    image_url = excluded.image_url,
-                    product_url = excluded.product_url,
-                    unit_price = excluded.unit_price,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("item_id"),
-                product.get("name"),
-                product.get("brand", ""),
-                product.get("price"),
-                product.get("original_price", 0),
-                product.get("image_url"),
-                product.get("product_url"),
-                product.get("category", ""),
-                product.get("unit_price", ""),
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"트레이더스 상품 저장 오류: {e}")
-            return False
+        """트레이더스 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("traders", product)
 
     def get_traders_catalog_count(self) -> int:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM traders_catalog")
-        return cursor.fetchone()[0]
+        """트레이더스 카탈로그 상품 수"""
+        return self.get_catalog_count("traders")
 
-    # ========== 이케아 카탈로그 ==========
+    # ========== 이케아 카탈로그 (하위 호환) ==========
 
     def insert_ikea_product(self, product: dict) -> bool:
-        """이케아 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO ikea_catalog
-                (product_id, name, type_name, price, image_url, product_url,
-                 category, color, size, rating, review_count, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(product_id) DO UPDATE SET
-                    name = excluded.name,
-                    type_name = excluded.type_name,
-                    price = excluded.price,
-                    image_url = excluded.image_url,
-                    product_url = excluded.product_url,
-                    rating = excluded.rating,
-                    review_count = excluded.review_count,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("product_id"),
-                product.get("name"),
-                product.get("type_name", ""),
-                product.get("price"),
-                product.get("image_url"),
-                product.get("product_url"),
-                product.get("category", ""),
-                product.get("color", ""),
-                product.get("size", ""),
-                product.get("rating", 0),
-                product.get("review_count", 0),
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"이케아 상품 저장 오류: {e}")
-            return False
+        """이케아 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("ikea", product)
 
     def get_ikea_catalog_count(self) -> int:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM ikea_catalog")
-        return cursor.fetchone()[0]
+        """이케아 카탈로그 상품 수"""
+        return self.get_catalog_count("ikea")
 
-    # ========== 편의점 카탈로그 ==========
+    # ========== 편의점 카탈로그 (하위 호환) ==========
 
     def insert_convenience_product(self, product: dict) -> bool:
-        """편의점 상품 저장 (upsert)"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-                INSERT INTO convenience_catalog
-                (product_id, store, name, price, original_price, image_url, product_url,
-                 category, event_type, is_new, is_pb, keywords, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(product_id, store) DO UPDATE SET
-                    name = excluded.name,
-                    price = excluded.price,
-                    original_price = excluded.original_price,
-                    image_url = excluded.image_url,
-                    event_type = excluded.event_type,
-                    is_new = excluded.is_new,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (
-                product.get("product_id"),
-                product.get("store"),
-                product.get("name"),
-                product.get("price"),
-                product.get("original_price", 0),
-                product.get("image_url"),
-                product.get("product_url", ""),
-                product.get("category", ""),
-                product.get("event_type", ""),
-                1 if product.get("is_new") else 0,
-                1 if product.get("is_pb") else 0,
-                product.get("keywords", ""),
-            ))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"편의점 상품 저장 오류: {e}")
-            return False
+        """편의점 상품 저장 (제너릭 메서드 사용)"""
+        return self.insert_catalog_product("convenience", product)
 
     def get_convenience_catalog_count(self, store: str = None) -> int:
+        """편의점 카탈로그 상품 수"""
         cursor = self.conn.cursor()
         if store:
             cursor.execute("SELECT COUNT(*) FROM convenience_catalog WHERE store = ?", (store,))
@@ -1065,6 +977,7 @@ class ImprovedDatabase:
         return cursor.fetchone()[0]
 
     def get_convenience_catalog_by_store(self, store: str) -> list:
+        """편의점별 카탈로그 조회"""
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM convenience_catalog WHERE store = ? ORDER BY updated_at DESC", (store,))
         return [dict(row) for row in cursor.fetchall()]
