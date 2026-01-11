@@ -5,19 +5,37 @@
 import json
 import re
 from typing import Optional
-import google.generativeai as genai
+
+# 새 SDK (google-genai) 우선 사용, 없으면 레거시 fallback
+try:
+    from google import genai
+    NEW_SDK = True
+except ImportError:
+    import google.generativeai as genai
+    NEW_SDK = False
+
 from config import GEMINI_API_KEY, PRODUCT_EXTRACTION_PROMPT
 
 
 class AIAnalyzer:
+    """Gemini API를 사용한 AI 분석기"""
+
+    MODEL_NAME = "gemini-2.0-flash"
+
     def __init__(self, api_key: str = None):
         self.api_key = api_key or GEMINI_API_KEY
         if not self.api_key:
             raise ValueError("Gemini API 키가 필요합니다. .env 파일을 확인하세요.")
 
-        genai.configure(api_key=self.api_key)
-        # Gemini 2.0 Flash - 빠르고 저렴
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        if NEW_SDK:
+            # 새 SDK: Client 기반
+            self.client = genai.Client(api_key=self.api_key)
+            self.model = None  # 새 SDK는 client.models.generate_content() 사용
+        else:
+            # 레거시 SDK
+            genai.configure(api_key=self.api_key)
+            self.client = None
+            self.model = genai.GenerativeModel(self.MODEL_NAME)
 
     def extract_products(self, transcript: str, store_name: str) -> list:
         """
@@ -49,8 +67,16 @@ class AIAnalyzer:
         )
 
         try:
-            response = self.model.generate_content(prompt)
-            text = response.text.strip()
+            # SDK에 따라 다른 방식으로 호출
+            if NEW_SDK and self.client:
+                response = self.client.models.generate_content(
+                    model=self.MODEL_NAME,
+                    contents=prompt
+                )
+                text = response.text.strip()
+            else:
+                response = self.model.generate_content(prompt)
+                text = response.text.strip()
 
             # JSON 추출 (마크다운 코드블록 제거)
             json_match = re.search(r'\[[\s\S]*\]', text)
@@ -152,7 +178,14 @@ class AIAnalyzer:
 {{"sentiment": "추천/비추천/중립", "reason": "이유"}}
 """
         try:
-            response = self.model.generate_content(prompt)
+            if NEW_SDK and self.client:
+                response = self.client.models.generate_content(
+                    model=self.MODEL_NAME,
+                    contents=prompt
+                )
+            else:
+                response = self.model.generate_content(prompt)
+
             json_match = re.search(r'\{[\s\S]*\}', response.text)
             if json_match:
                 return json.loads(json_match.group())

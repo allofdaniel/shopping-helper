@@ -26,12 +26,19 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-# Google Gemini
+# Google Gemini - 새 SDK 우선, 레거시 fallback
 try:
-    import google.generativeai as genai
+    from google import genai as new_genai
     GEMINI_AVAILABLE = True
+    GEMINI_NEW_SDK = True
 except ImportError:
-    GEMINI_AVAILABLE = False
+    try:
+        import google.generativeai as genai
+        GEMINI_AVAILABLE = True
+        GEMINI_NEW_SDK = False
+    except ImportError:
+        GEMINI_AVAILABLE = False
+        GEMINI_NEW_SDK = False
 
 
 # 매장별 가격 범위
@@ -158,21 +165,31 @@ class ImprovedProductExtractor:
 
         if self.provider == "gemini":
             if not GEMINI_AVAILABLE:
-                raise ImportError("google-generativeai 패키지를 설치하세요")
+                raise ImportError("google-genai 패키지를 설치하세요: pip install google-genai")
             if not GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY가 필요합니다")
-            genai.configure(api_key=GEMINI_API_KEY)
-            # 최신 모델 우선
-            model_names = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-pro"]
-            self.model = None
-            for model_name in model_names:
-                try:
-                    self.model = genai.GenerativeModel(model_name)
-                    break
-                except Exception:
-                    continue
-            if self.model is None:
-                self.model = genai.GenerativeModel("gemini-pro")
+
+            self.model_name = "gemini-2.0-flash"
+
+            if GEMINI_NEW_SDK:
+                # 새 SDK: Client 기반
+                self.gemini_client = new_genai.Client(api_key=GEMINI_API_KEY)
+                self.model = None
+            else:
+                # 레거시 SDK
+                genai.configure(api_key=GEMINI_API_KEY)
+                self.gemini_client = None
+                model_names = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-pro"]
+                self.model = None
+                for model_name in model_names:
+                    try:
+                        self.model = genai.GenerativeModel(model_name)
+                        self.model_name = model_name
+                        break
+                    except Exception:
+                        continue
+                if self.model is None:
+                    self.model = genai.GenerativeModel("gemini-pro")
 
         elif self.provider == "openai":
             if not OPENAI_AVAILABLE:
@@ -253,8 +270,17 @@ class ImprovedProductExtractor:
 
     def _extract_with_gemini(self, prompt: str) -> str:
         """Gemini로 추출"""
-        response = self.model.generate_content(prompt)
-        return response.text
+        if GEMINI_NEW_SDK and self.gemini_client:
+            # 새 SDK
+            response = self.gemini_client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
+            return response.text
+        else:
+            # 레거시 SDK
+            response = self.model.generate_content(prompt)
+            return response.text
 
     def _extract_with_openai(self, prompt: str) -> str:
         """OpenAI로 추출"""

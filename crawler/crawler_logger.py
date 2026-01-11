@@ -41,9 +41,20 @@ class CrawlerLogger:
         self.logger.setLevel(logging.DEBUG)
         self.logger.handlers = []  # 기존 핸들러 제거
 
-        # 콘솔 핸들러 (INFO 이상)
+        # 환경변수에서 로그 레벨 읽기
+        log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+        log_level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL,
+        }
+        console_log_level = log_level_map.get(log_level_str, logging.INFO)
+
+        # 콘솔 핸들러
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(console_log_level)
         console_format = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(message)s',
             datefmt='%H:%M:%S'
