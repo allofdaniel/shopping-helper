@@ -4,26 +4,37 @@
 """
 import re
 import time
-from typing import Optional
+from typing import Optional, List, TypedDict
 import requests
 from urllib.parse import quote
 import json
 
 
+class ProductMatch(TypedDict, total=False):
+    """상품 매칭 결과 타입"""
+    product_code: str
+    name: str
+    price: int
+    image_url: str
+    product_url: str
+    category: str
+
+
 class StoreMatcherBase:
     """매장 매칭 베이스 클래스"""
 
-    def __init__(self):
-        self.session = requests.Session()
+    def __init__(self) -> None:
+        self.session: requests.Session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         })
 
-    def search(self, product_name: str) -> Optional[dict]:
+    def search(self, product_name: str) -> List[ProductMatch]:
+        """상품 검색 (서브클래스에서 구현)"""
         raise NotImplementedError
 
-    def _delay(self, seconds: float = 1.0):
+    def _delay(self, seconds: float = 1.0) -> None:
         """요청 간격 준수 (차단 방지)"""
         time.sleep(seconds)
 
@@ -31,13 +42,12 @@ class StoreMatcherBase:
 class DaisoMatcher(StoreMatcherBase):
     """다이소몰 상품 매칭"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.base_url = "https://www.daisomall.co.kr"
-        # 다이소몰 검색 API (브라우저 네트워크 탭에서 확인한 엔드포인트)
-        self.search_url = "https://www.daisomall.co.kr/api/product/search"
+        self.base_url: str = "https://www.daisomall.co.kr"
+        self.search_url: str = "https://www.daisomall.co.kr/api/product/search"
 
-    def search(self, product_name: str, max_results: int = 5) -> list:
+    def search(self, product_name: str, max_results: int = 5) -> List[ProductMatch]:
         """
         다이소몰에서 상품 검색
 

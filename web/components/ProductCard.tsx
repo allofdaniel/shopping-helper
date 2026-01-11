@@ -131,12 +131,17 @@ export const ProductCard = memo(function ProductCard({
   return (
     <>
       {/* 카드 - 터치 영역 44x44 이상 (Fitts's Law) */}
-      <div
+      <article
         onClick={handleCardClick}
+        onKeyDown={(e) => e.key === 'Enter' && handleCardClick()}
+        role="button"
+        tabIndex={0}
+        aria-label={`${product.name}, ${store?.name}, ${formatPrice(product.official_price || product.price)}`}
         className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden cursor-pointer
                    active:scale-[0.98] transition-transform duration-100
                    hover:shadow-md dark:shadow-gray-900/50 min-h-[180px]
-                   border border-transparent dark:border-gray-700"
+                   border border-transparent dark:border-gray-700
+                   focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
       >
         {/* 이미지 영역 */}
         <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-700">
@@ -263,13 +268,16 @@ export const ProductCard = memo(function ProductCard({
             )}
           </div>
         </div>
-      </div>
+      </article>
 
       {/* 상세 모달 - 풀스크린 방식으로 변경 */}
       {showDetail && (
         <div
           className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center"
           onClick={handleCloseDetail}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`product-detail-${product.id}`}
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         >
           <div

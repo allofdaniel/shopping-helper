@@ -12,8 +12,8 @@ from typing import Optional, Callable
 
 from database import Database
 from youtube_crawler import YouTubeCrawler, TRANSCRIPT_AVAILABLE
-from product_extractor import ProductExtractor
-from product_matcher import ProductMatcher
+from improved_product_extractor import ImprovedProductExtractor as ProductExtractor
+from improved_product_matcher import ImprovedProductMatcher as ProductMatcher
 from sns_crawler import SNSCollector, SocialPost
 from config import STORE_CATEGORIES
 

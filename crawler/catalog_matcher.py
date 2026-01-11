@@ -6,19 +6,51 @@
 import sqlite3
 import re
 from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Optional, Tuple
 
-DB_PATH = '../data/products.db'
+# config에서 DB 경로 가져오기
+try:
+    from config import DB_PATH
+except ImportError:
+    DB_PATH = Path(__file__).parent.parent / "data" / "products.db"
 
-def extract_keywords(name):
+
+# 상수 정의
+MAX_PRODUCTS_PER_VIDEO = 10
+MIN_MATCH_SCORE = 0.25
+MAX_KEYWORD_LENGTH = 50
+MAX_NAME_LENGTH = 200
+
+
+def _sanitize_text(text: Optional[str], max_length: int = 10000) -> str:
+    """텍스트 정제 및 길이 제한"""
+    if not text:
+        return ""
+    # 제어 문자 제거 및 길이 제한
+    cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', str(text))
+    return cleaned[:max_length]
+
+
+def extract_keywords(name: Optional[str]) -> List[str]:
     """상품명에서 검색 키워드 추출"""
+    if not name:
+        return []
+    # 입력 검증
+    name = _sanitize_text(name, MAX_NAME_LENGTH)
     # 불필요 문자 제거
     clean = re.sub(r'[\[\]\(\)\d+ml\d+g\d+p\d+개입]', ' ', name.lower())
     clean = re.sub(r'\s+', ' ', clean).strip()
-    words = [w for w in clean.split() if len(w) >= 2]
+    words = [w[:MAX_KEYWORD_LENGTH] for w in clean.split() if 2 <= len(w) <= MAX_KEYWORD_LENGTH]
     return words
 
-def run_catalog_matching():
-    conn = sqlite3.connect(DB_PATH)
+def run_catalog_matching() -> int:
+    """카탈로그 매칭 실행
+
+    Returns:
+        총 상품 수
+    """
+    conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
@@ -38,25 +70,29 @@ def run_catalog_matching():
     videos = cur.fetchall()
     print(f'상품 추출 대상 영상: {len(videos)}개')
 
-    # 3. 카탈로그 준비
+    # 3. 카탈로그 준비 (입력 검증 포함)
     catalog_items = []
     for c in catalog:
-        keywords = extract_keywords(c['name'])
+        name = _sanitize_text(c['name'], MAX_NAME_LENGTH)
+        keywords = extract_keywords(name)
+        if not keywords:
+            continue
         catalog_items.append({
-            'product_no': c['product_no'],
-            'name': c['name'],
-            'price': c['price'],
-            'image_url': c['image_url'],
-            'product_url': c['product_url'],
-            'category': c['category'],
+            'product_no': _sanitize_text(c['product_no'], 50),
+            'name': name,
+            'price': int(c['price']) if c['price'] else 0,
+            'image_url': _sanitize_text(c['image_url'], 500),
+            'product_url': _sanitize_text(c['product_url'], 500),
+            'category': _sanitize_text(c['category'], 100),
             'keywords': keywords
         })
 
     # 4. 영상별 상품 매칭
     new_products = []
     for video in videos:
-        transcript = (video['transcript'] or '').lower()
-        title = (video['title'] or '').lower()
+        # 입력 검증
+        transcript = _sanitize_text(video['transcript']).lower()
+        title = _sanitize_text(video['title'], 500).lower()
         combined = title + ' ' + transcript
 
         matches = []
@@ -73,10 +109,10 @@ def run_catalog_matching():
                     score += 0.3
                 matches.append((score, item, matched_keywords))
 
-        # 점수 높은 순, 상위 10개
+        # 점수 높은 순, 상위 N개
         matches.sort(key=lambda x: x[0], reverse=True)
-        for score, item, kws in matches[:10]:
-            if score >= 0.25:  # 25% 이상 매칭
+        for score, item, kws in matches[:MAX_PRODUCTS_PER_VIDEO]:
+            if score >= MIN_MATCH_SCORE:
                 new_products.append({
                     'video_id': video['video_id'],
                     'name': item['name'],

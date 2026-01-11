@@ -1,21 +1,56 @@
 """
 꿀템장바구니 - 설정 파일
+통합된 설정 관리 모듈
 """
 import os
 from dotenv import load_dotenv
 from pathlib import Path
+from typing import Optional
 
 # .env 파일 로드
 load_dotenv()
 
-# API Keys
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# === API Keys ===
+YOUTUBE_API_KEY: Optional[str] = os.getenv("YOUTUBE_API_KEY")
+OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
 
-# Database
-DATA_DIR = Path(__file__).parent.parent / "data"
-DB_PATH = DATA_DIR / "products.db"
+# === AWS S3 Settings ===
+AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION: str = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+S3_BUCKET: str = os.getenv("S3_BUCKET", "notam-korea-data")
+
+# === Database ===
+DATA_DIR: Path = Path(__file__).parent.parent / "data"
+DB_PATH: Path = DATA_DIR / "products.db"
+
+
+def validate_config() -> dict:
+    """설정 검증 및 상태 반환
+
+    Returns:
+        dict: 설정 상태 {key: (is_set, is_required)}
+    """
+    return {
+        "YOUTUBE_API_KEY": (bool(YOUTUBE_API_KEY), True),
+        "GEMINI_API_KEY": (bool(GEMINI_API_KEY), True),
+        "OPENAI_API_KEY": (bool(OPENAI_API_KEY), False),
+        "AWS_ACCESS_KEY_ID": (bool(AWS_ACCESS_KEY_ID), False),
+        "AWS_SECRET_ACCESS_KEY": (bool(AWS_SECRET_ACCESS_KEY), False),
+    }
+
+
+def check_required_config() -> list:
+    """필수 설정 누락 확인
+
+    Returns:
+        list: 누락된 필수 설정 키 리스트
+    """
+    config_status = validate_config()
+    missing = [key for key, (is_set, is_required) in config_status.items()
+               if is_required and not is_set]
+    return missing
 
 # 타겟 매장 카테고리
 STORE_CATEGORIES = {

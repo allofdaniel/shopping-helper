@@ -19,8 +19,8 @@ class UnifiedMatcher:
         """각 매장별 매처 초기화"""
         # 다이소
         try:
-            from product_matcher import ProductMatcher
-            self.matchers["daiso"] = ProductMatcher()
+            from improved_product_matcher import ImprovedProductMatcher
+            self.matchers["daiso"] = ImprovedProductMatcher()
             print("[OK] 다이소 매처 로드됨")
         except Exception as e:
             print(f"[!] 다이소 매처 로드 실패: {e}")

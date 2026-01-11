@@ -85,6 +85,16 @@ CATALOG_CONFIG: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# 허용된 테이블 이름 목록 (SQL Injection 방지)
+ALLOWED_TABLES = frozenset(config['table'] for config in CATALOG_CONFIG.values())
+
+
+def _validate_table_name(table: str) -> str:
+    """테이블 이름 검증 (SQL Injection 방지)"""
+    if table not in ALLOWED_TABLES:
+        raise ValueError(f"Invalid table name: {table}")
+    return table
+
 
 class ImprovedDatabase:
     """개선된 데이터베이스 클래스"""
@@ -738,8 +748,10 @@ class ImprovedDatabase:
         if not config:
             return []
 
+        # 테이블 이름 검증 (SQL Injection 방지)
+        table = _validate_table_name(config['table'])
         cursor = self.conn.cursor()
-        cursor.execute(f"SELECT * FROM {config['table']} ORDER BY updated_at DESC")
+        cursor.execute(f"SELECT * FROM {table} ORDER BY updated_at DESC")
         return [dict(row) for row in cursor.fetchall()]
 
     def get_catalog_count(self, store_key: str) -> int:
@@ -748,13 +760,19 @@ class ImprovedDatabase:
         if not config:
             return 0
 
+        # 테이블 이름 검증 (SQL Injection 방지)
+        table = _validate_table_name(config['table'])
         cursor = self.conn.cursor()
-        cursor.execute(f"SELECT COUNT(*) FROM {config['table']}")
+        cursor.execute(f"SELECT COUNT(*) FROM {table}")
         return cursor.fetchone()[0]
 
     def get_products_by_store(self, store_key: str, approved_only: bool = True,
                                limit: int = 100, offset: int = 0) -> list:
         """매장별 상품 조회"""
+        # 파라미터 검증 (SQL Injection 방지)
+        limit = min(max(int(limit), 1), 1000)  # 1-1000 사이로 제한
+        offset = max(int(offset), 0)
+
         cursor = self.conn.cursor()
         query = """
             SELECT p.*, v.title as video_title, v.channel_title,
@@ -767,9 +785,9 @@ class ImprovedDatabase:
             query += " AND p.is_approved = 1"
         query += " AND p.is_hidden = 0"
         query += " ORDER BY p.source_view_count DESC"
-        query += f" LIMIT {limit} OFFSET {offset}"
+        query += " LIMIT ? OFFSET ?"
 
-        cursor.execute(query, (store_key,))
+        cursor.execute(query, (store_key, limit, offset))
         return [dict(row) for row in cursor.fetchall()]
 
     def get_pending_products(self, limit: int = 50) -> list:

@@ -3,17 +3,34 @@
 유튜브 영상에서 자막(스크립트)을 추출합니다.
 (youtube-transcript-api 0.7+ 버전 대응)
 """
-from typing import Optional
+from typing import Optional, List, TypedDict
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
 
-class TranscriptExtractor:
-    def __init__(self):
-        self.preferred_languages = ["ko", "en"]
-        self.api = YouTubeTranscriptApi()
+class TranscriptItem(TypedDict):
+    """자막 항목 타입"""
+    text: str
+    start: float
+    duration: float
 
-    def get_transcript(self, video_id: str) -> Optional[dict]:
+
+class TranscriptResult(TypedDict):
+    """자막 추출 결과 타입"""
+    video_id: str
+    language: str
+    transcript: List[TranscriptItem]
+    full_text: str
+
+
+class TranscriptExtractor:
+    """유튜브 자막 추출기"""
+
+    def __init__(self) -> None:
+        self.preferred_languages: List[str] = ["ko", "en"]
+        self.api: YouTubeTranscriptApi = YouTubeTranscriptApi()
+
+    def get_transcript(self, video_id: str) -> Optional[TranscriptResult]:
         """
         영상 자막 추출
 
