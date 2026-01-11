@@ -40,6 +40,24 @@ from improved_product_matcher import ImprovedProductMatcher
 from improved_database import ImprovedDatabase
 from config import STORE_CATEGORIES, CRAWL_CONFIG
 
+# 로거
+try:
+    from crawler_logger import get_logger, cleanup_old_logs
+    logger = get_logger("pipeline")
+except ImportError:
+    # 폴백
+    class FallbackLogger:
+        def info(self, msg): print(f"[INFO] {msg}")
+        def debug(self, msg): pass
+        def warning(self, msg): print(f"[WARN] {msg}")
+        def error(self, msg, exc_info=False): print(f"[ERROR] {msg}")
+        def success(self, msg): print(f"[OK] {msg}")
+        def start_crawl(self, store, t): return datetime.now()
+        def end_crawl(self, store, start, stats): pass
+        def print_daily_summary(self): pass
+    logger = FallbackLogger()
+    def cleanup_old_logs(days=7): pass
+
 # 카탈로그 크롤러
 try:
     from daiso_mall_scraper import DaisoMallScraper, PLAYWRIGHT_AVAILABLE
@@ -259,9 +277,8 @@ class UnlimitedPipeline:
         if not config.get("enabled"):
             return {"error": f"{store_key} 카탈로그 크롤링 비활성화"}
 
-        print(f"\n{'='*60}")
-        print(f"[카탈로그 크롤링] {store_key} 시작")
-        print(f"{'='*60}")
+        # 로깅 시작
+        start_time = logger.start_crawl(store_key, "catalog")
 
         stats = {
             "store": store_key,
@@ -646,11 +663,13 @@ class UnlimitedPipeline:
                     if self.db.insert_convenience_product(p.to_dict()):
                         stats["products_saved"] += 1
 
-                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                logger.success(f"크롤링 완료: {stats['products_crawled']}개 수집, "
                       f"{stats['products_saved']}개 저장")
             finally:
                 await scraper.close()
 
+        # 로깅 종료
+        logger.end_crawl(store_key, start_time, stats)
         return stats
 
     def crawl_catalog(self, store_key: str = "daiso") -> Dict:
@@ -906,20 +925,31 @@ class UnlimitedPipeline:
         if stores is None:
             stores = list(STORE_CATEGORIES.keys())
 
-        print(f"\n=== 데몬 모드 시작 ===")
-        print(f"수집 대상: {', '.join(stores)}")
-        print(f"영상 수집 간격: {interval_seconds}초 ({interval_seconds/3600:.1f}시간)")
-        print(f"카탈로그 업데이트 간격: {catalog_interval_hours}시간")
-        print(f"종료: Ctrl+C")
+        logger.info("=== 데몬 모드 시작 ===")
+        logger.info(f"수집 대상: {', '.join(stores)}")
+        logger.info(f"영상 수집 간격: {interval_seconds}초 ({interval_seconds/3600:.1f}시간)")
+        logger.info(f"카탈로그 업데이트 간격: {catalog_interval_hours}시간")
+        logger.info("종료: Ctrl+C")
+
+        # 시작 시 오래된 로그 정리
+        cleanup_old_logs(days=7)
 
         run_count = 0
         last_catalog_crawl = None
+        last_day = datetime.now().date()
 
         while True:
             run_count += 1
-            print(f"\n{'='*60}")
-            print(f"[실행 #{run_count}] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"{'='*60}")
+            logger.info(f"{'='*60}")
+            logger.info(f"[실행 #{run_count}] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"{'='*60}")
+
+            # 일일 리셋 시 통계 출력 및 로그 정리
+            current_day = datetime.now().date()
+            if current_day != last_day:
+                logger.print_daily_summary()
+                cleanup_old_logs(days=7)
+                last_day = current_day
 
             # 카탈로그 업데이트 체크 (주기적으로)
             if CATALOG_CRAWLER_AVAILABLE:
@@ -930,13 +960,13 @@ class UnlimitedPipeline:
                     should_crawl_catalog = True
 
                 if should_crawl_catalog:
-                    print("\n[카탈로그 업데이트 시작]")
+                    logger.info("[카탈로그 업데이트 시작]")
                     for store_key in stores:
                         if store_key in CATALOG_CONFIG:
                             try:
                                 self.crawl_catalog(store_key)
                             except Exception as e:
-                                print(f"[에러] 카탈로그 크롤링 실패 ({store_key}): {e}")
+                                logger.error(f"카탈로그 크롤링 실패 ({store_key}): {e}")
                     last_catalog_crawl = datetime.now()
 
             # 영상 수집
@@ -944,9 +974,9 @@ class UnlimitedPipeline:
                 try:
                     self.run(store_key, max_videos=20)
                 except Exception as e:
-                    print(f"[에러] {store_key}: {e}")
+                    logger.error(f"{store_key}: {e}")
 
-            print(f"\n다음 실행까지 {interval_seconds}초 대기...")
+            logger.info(f"다음 실행까지 {interval_seconds}초 대기...")
             time.sleep(interval_seconds)
 
 
