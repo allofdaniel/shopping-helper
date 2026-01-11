@@ -155,3 +155,47 @@ jobs:
             crawler/data/products_export.json
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Send Discord notification on success
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -H "Content-Type: application/json" \
+              -d '{
+                "embeds": [{
+                  "title": "Crawling Completed",
+                  "description": "Daily crawling job finished successfully.",
+                  "color": 5763719,
+                  "fields": [
+                    {"name": "Run", "value": "#${{ github.run_number }}", "inline": true},
+                    {"name": "Trigger", "value": "${{ github.event_name }}", "inline": true}
+                  ],
+                  "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+                }]
+              }' \
+              $DISCORD_WEBHOOK_URL
+          fi
+
+      - name: Send Discord notification on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -H "Content-Type: application/json" \
+              -d '{
+                "embeds": [{
+                  "title": "Crawling Failed",
+                  "description": "Daily crawling job encountered an error.",
+                  "color": 15158332,
+                  "fields": [
+                    {"name": "Run", "value": "#${{ github.run_number }}", "inline": true},
+                    {"name": "Details", "value": "[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})", "inline": true}
+                  ],
+                  "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+                }]
+              }' \
+              $DISCORD_WEBHOOK_URL
+          fi
