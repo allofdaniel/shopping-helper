@@ -4,7 +4,7 @@
 - Playwright 기반 공통 기능
 - 봇 탐지 우회
 - 재시도 로직
-- 에러 핸들링
+- 표준화된 에러 핸들링
 """
 import asyncio
 import random
@@ -37,6 +37,22 @@ except ImportError:
         def log_error(self, store, op, e): print(f"[ERROR] {store} {op}: {e}")
 
     def get_logger(name): return FallbackLogger()
+
+try:
+    from errors import (
+        CrawlerError, NetworkError, BrowserError, TimeoutError,
+        ErrorContext, ErrorAggregator, classify_error, get_error_aggregator
+    )
+except ImportError:
+    # 에러 모듈 없을 경우 기본 동작
+    CrawlerError = Exception
+    NetworkError = Exception
+    BrowserError = Exception
+    TimeoutError = Exception
+    ErrorContext = None
+    ErrorAggregator = None
+    classify_error = lambda e, c=None: e
+    get_error_aggregator = lambda: None
 
 
 T = TypeVar('T')
@@ -81,6 +97,9 @@ class BaseScraper(ABC, Generic[T]):
         self.playwright = None
         self.logger = get_logger(self.store_name)
         self._is_initialized = False
+
+        # 에러 집계기
+        self.error_aggregator = get_error_aggregator() or ErrorAggregator() if ErrorAggregator else None
 
     async def _init_browser(self):
         """브라우저 초기화 (봇 탐지 우회 포함)"""
@@ -261,20 +280,45 @@ class BaseScraper(ABC, Generic[T]):
         pass
 
     async def search_products_with_retry(self, query: str, limit: int = 20) -> List[T]:
-        """상품 검색 (재시도 포함)"""
+        """상품 검색 (재시도 포함, 표준화된 에러 핸들링)"""
+        last_error = None
+
         for attempt in range(self.config.max_retries):
             try:
                 return await self.search_products(query, limit)
             except Exception as e:
                 self.logger.warning(f"검색 실패 '{query}' (시도 {attempt + 1}/{self.config.max_retries}): {e}")
 
+                # 에러 분류 및 집계
+                if ErrorContext:
+                    ctx = ErrorContext(store=self.store_name, operation="search", query=query)
+                    classified = classify_error(e, ctx)
+                    last_error = classified
+
+                    # 집계기에 추가
+                    if self.error_aggregator:
+                        self.error_aggregator.add(classified)
+
+                    # 재시도 불가능한 에러면 즉시 종료
+                    if not classified.retryable:
+                        self.logger.error(f"재시도 불가능한 에러: {classified}")
+                        return []
+
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(self.config.retry_delay * (attempt + 1))
+                    # 지수 백오프
+                    delay = self.config.retry_delay * (2 ** attempt)
+                    await asyncio.sleep(delay)
                 else:
                     self.logger.log_error(self.store_name, f"검색 '{query}'", e)
                     return []
 
         return []
+
+    def get_error_summary(self) -> Dict[str, Any]:
+        """에러 요약 조회"""
+        if self.error_aggregator:
+            return self.error_aggregator.summary()
+        return {"total": 0}
 
     async def close(self):
         """리소스 정리"""
