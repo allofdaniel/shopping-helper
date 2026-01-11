@@ -68,6 +68,27 @@ try:
 except ImportError:
     COUPANG_SCRAPER_AVAILABLE = False
 
+# 트레이더스 크롤러
+try:
+    from traders_scraper import TradersScraper, TRADERS_SEARCH_KEYWORDS
+    TRADERS_SCRAPER_AVAILABLE = True
+except ImportError:
+    TRADERS_SCRAPER_AVAILABLE = False
+
+# 이케아 크롤러
+try:
+    from ikea_scraper import IkeaScraper, IKEA_SEARCH_KEYWORDS
+    IKEA_SCRAPER_AVAILABLE = True
+except ImportError:
+    IKEA_SCRAPER_AVAILABLE = False
+
+# 편의점 크롤러
+try:
+    from convenience_scraper import CUScraper, GS25Scraper, SevenElevenScraper, Emart24Scraper
+    CONVENIENCE_SCRAPER_AVAILABLE = True
+except ImportError:
+    CONVENIENCE_SCRAPER_AVAILABLE = False
+
 # 카탈로그 크롤링 설정
 CATALOG_CONFIG = {
     "daiso": {
@@ -123,6 +144,53 @@ CATALOG_CONFIG = {
         ],
         "categories": [],
         "update_interval_hours": 24,
+    },
+    "traders": {
+        "enabled": True,
+        "crawler_class": "TradersScraper",
+        "keywords": [
+            "과자", "스낵", "음료", "우유", "커피",
+            "고기", "돼지고기", "소고기", "닭고기",
+            "과일", "채소", "냉동식품", "라면",
+            "세제", "화장지", "청소용품", "주방용품",
+        ],
+        "categories": [],
+        "update_interval_hours": 24,
+    },
+    "ikea": {
+        "enabled": True,
+        "crawler_class": "IkeaScraper",
+        "keywords": [
+            "책상", "의자", "수납장", "선반", "옷장",
+            "소파", "테이블", "조명", "거울", "러그",
+            "주방용품", "식기", "수납", "정리", "바구니",
+        ],
+        "categories": [],
+        "update_interval_hours": 24,
+    },
+    "cu": {
+        "enabled": True,
+        "crawler_class": "CUScraper",
+        "event_types": ["1+1", "2+1"],
+        "update_interval_hours": 12,  # 편의점은 더 자주 업데이트
+    },
+    "gs25": {
+        "enabled": True,
+        "crawler_class": "GS25Scraper",
+        "event_types": ["1+1", "2+1"],
+        "update_interval_hours": 12,
+    },
+    "seveneleven": {
+        "enabled": True,
+        "crawler_class": "SevenElevenScraper",
+        "event_types": ["1+1", "2+1"],
+        "update_interval_hours": 12,
+    },
+    "emart24": {
+        "enabled": True,
+        "crawler_class": "Emart24Scraper",
+        "event_types": ["1+1", "2+1"],
+        "update_interval_hours": 12,
     },
 }
 
@@ -466,6 +534,120 @@ class UnlimitedPipeline:
                 print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
                       f"{stats['products_saved']}개 저장 (중복 제외)")
 
+            finally:
+                await scraper.close()
+
+        elif store_key == "traders":
+            if not TRADERS_SCRAPER_AVAILABLE:
+                return {"error": "트레이더스 스크래퍼를 불러올 수 없습니다"}
+
+            from traders_scraper import TradersScraper
+            scraper = TradersScraper(headless=True)
+
+            try:
+                all_products = []
+                keywords = config.get("keywords", [])
+                print(f"\n검색 키워드: {len(keywords)}개")
+
+                for keyword in keywords:
+                    print(f"  검색: '{keyword}'")
+                    try:
+                        products = await scraper.search_products(keyword, limit=20)
+                        stats["products_crawled"] += len(products)
+                        for p in products:
+                            all_products.append(p)
+                            print(f"    - {p.name}: {p.price:,}원")
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{keyword}: {e}")
+                    await asyncio.sleep(2)
+
+                seen_ids = set()
+                for p in all_products:
+                    if p.item_id not in seen_ids:
+                        seen_ids.add(p.item_id)
+                        if self.db.insert_traders_product(p.to_dict()):
+                            stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장")
+            finally:
+                await scraper.close()
+
+        elif store_key == "ikea":
+            if not IKEA_SCRAPER_AVAILABLE:
+                return {"error": "이케아 스크래퍼를 불러올 수 없습니다"}
+
+            from ikea_scraper import IkeaScraper
+            scraper = IkeaScraper(headless=True)
+
+            try:
+                all_products = []
+                keywords = config.get("keywords", [])
+                print(f"\n검색 키워드: {len(keywords)}개")
+
+                for keyword in keywords:
+                    print(f"  검색: '{keyword}'")
+                    try:
+                        products = await scraper.search_products(keyword, limit=20)
+                        stats["products_crawled"] += len(products)
+                        for p in products:
+                            all_products.append(p)
+                            print(f"    - {p.name} ({p.type_name}): {p.price:,}원")
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{keyword}: {e}")
+                    await asyncio.sleep(3)
+
+                seen_ids = set()
+                for p in all_products:
+                    if p.product_id not in seen_ids:
+                        seen_ids.add(p.product_id)
+                        if self.db.insert_ikea_product(p.to_dict()):
+                            stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장")
+            finally:
+                await scraper.close()
+
+        elif store_key in ["cu", "gs25", "seveneleven", "emart24"]:
+            if not CONVENIENCE_SCRAPER_AVAILABLE:
+                return {"error": "편의점 스크래퍼를 불러올 수 없습니다"}
+
+            scraper_map = {
+                "cu": CUScraper,
+                "gs25": GS25Scraper,
+                "seveneleven": SevenElevenScraper,
+                "emart24": Emart24Scraper,
+            }
+
+            ScraperClass = scraper_map[store_key]
+            scraper = ScraperClass(headless=True)
+
+            try:
+                all_products = []
+                event_types = config.get("event_types", ["1+1"])
+
+                for event_type in event_types:
+                    print(f"  행사: '{event_type}'")
+                    try:
+                        products = await scraper.get_event_products(event_type, limit=30)
+                        stats["products_crawled"] += len(products)
+                        for p in products:
+                            all_products.append(p)
+                            print(f"    - {p.name}: {p.price:,}원 [{event_type}]")
+                    except Exception as e:
+                        print(f"    [에러] {e}")
+                        stats["errors"].append(f"{event_type}: {e}")
+                    await asyncio.sleep(2)
+
+                for p in all_products:
+                    if self.db.insert_convenience_product(p.to_dict()):
+                        stats["products_saved"] += 1
+
+                print(f"\n크롤링 완료: {stats['products_crawled']}개 수집, "
+                      f"{stats['products_saved']}개 저장")
             finally:
                 await scraper.close()
 

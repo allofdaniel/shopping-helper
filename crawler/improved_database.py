@@ -199,6 +199,68 @@ class ImprovedDatabase:
             )
         """)
 
+        # 트레이더스 카탈로그 테이블
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS traders_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                brand TEXT,
+                price INTEGER,
+                original_price INTEGER,
+                image_url TEXT,
+                product_url TEXT,
+                category TEXT,
+                unit_price TEXT,
+                keywords TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 이케아 카탈로그 테이블
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ikea_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                type_name TEXT,
+                price INTEGER,
+                image_url TEXT,
+                product_url TEXT,
+                category TEXT,
+                color TEXT,
+                size TEXT,
+                rating REAL DEFAULT 0,
+                review_count INTEGER DEFAULT 0,
+                keywords TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 편의점 카탈로그 테이블 (통합)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS convenience_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id TEXT NOT NULL,
+                store TEXT NOT NULL,
+                name TEXT NOT NULL,
+                price INTEGER,
+                original_price INTEGER,
+                image_url TEXT,
+                product_url TEXT,
+                category TEXT,
+                event_type TEXT,
+                is_new INTEGER DEFAULT 0,
+                is_pb INTEGER DEFAULT 0,
+                keywords TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(product_id, store)
+            )
+        """)
+
         # 품질 로그 테이블 (새로 추가)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS quality_logs (
@@ -866,6 +928,146 @@ class ImprovedDatabase:
         cursor = self.conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM coupang_catalog")
         return cursor.fetchone()[0]
+
+    # ========== 트레이더스 카탈로그 ==========
+
+    def insert_traders_product(self, product: dict) -> bool:
+        """트레이더스 상품 저장 (upsert)"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO traders_catalog
+                (item_id, name, brand, price, original_price, image_url, product_url,
+                 category, unit_price, keywords, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(item_id) DO UPDATE SET
+                    name = excluded.name,
+                    brand = excluded.brand,
+                    price = excluded.price,
+                    original_price = excluded.original_price,
+                    image_url = excluded.image_url,
+                    product_url = excluded.product_url,
+                    unit_price = excluded.unit_price,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                product.get("item_id"),
+                product.get("name"),
+                product.get("brand", ""),
+                product.get("price"),
+                product.get("original_price", 0),
+                product.get("image_url"),
+                product.get("product_url"),
+                product.get("category", ""),
+                product.get("unit_price", ""),
+                product.get("keywords", ""),
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"트레이더스 상품 저장 오류: {e}")
+            return False
+
+    def get_traders_catalog_count(self) -> int:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM traders_catalog")
+        return cursor.fetchone()[0]
+
+    # ========== 이케아 카탈로그 ==========
+
+    def insert_ikea_product(self, product: dict) -> bool:
+        """이케아 상품 저장 (upsert)"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO ikea_catalog
+                (product_id, name, type_name, price, image_url, product_url,
+                 category, color, size, rating, review_count, keywords, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_id) DO UPDATE SET
+                    name = excluded.name,
+                    type_name = excluded.type_name,
+                    price = excluded.price,
+                    image_url = excluded.image_url,
+                    product_url = excluded.product_url,
+                    rating = excluded.rating,
+                    review_count = excluded.review_count,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                product.get("product_id"),
+                product.get("name"),
+                product.get("type_name", ""),
+                product.get("price"),
+                product.get("image_url"),
+                product.get("product_url"),
+                product.get("category", ""),
+                product.get("color", ""),
+                product.get("size", ""),
+                product.get("rating", 0),
+                product.get("review_count", 0),
+                product.get("keywords", ""),
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"이케아 상품 저장 오류: {e}")
+            return False
+
+    def get_ikea_catalog_count(self) -> int:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM ikea_catalog")
+        return cursor.fetchone()[0]
+
+    # ========== 편의점 카탈로그 ==========
+
+    def insert_convenience_product(self, product: dict) -> bool:
+        """편의점 상품 저장 (upsert)"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO convenience_catalog
+                (product_id, store, name, price, original_price, image_url, product_url,
+                 category, event_type, is_new, is_pb, keywords, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_id, store) DO UPDATE SET
+                    name = excluded.name,
+                    price = excluded.price,
+                    original_price = excluded.original_price,
+                    image_url = excluded.image_url,
+                    event_type = excluded.event_type,
+                    is_new = excluded.is_new,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                product.get("product_id"),
+                product.get("store"),
+                product.get("name"),
+                product.get("price"),
+                product.get("original_price", 0),
+                product.get("image_url"),
+                product.get("product_url", ""),
+                product.get("category", ""),
+                product.get("event_type", ""),
+                1 if product.get("is_new") else 0,
+                1 if product.get("is_pb") else 0,
+                product.get("keywords", ""),
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"편의점 상품 저장 오류: {e}")
+            return False
+
+    def get_convenience_catalog_count(self, store: str = None) -> int:
+        cursor = self.conn.cursor()
+        if store:
+            cursor.execute("SELECT COUNT(*) FROM convenience_catalog WHERE store = ?", (store,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM convenience_catalog")
+        return cursor.fetchone()[0]
+
+    def get_convenience_catalog_by_store(self, store: str) -> list:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM convenience_catalog WHERE store = ? ORDER BY updated_at DESC", (store,))
+        return [dict(row) for row in cursor.fetchall()]
 
     # ========== 통계 ==========
 
