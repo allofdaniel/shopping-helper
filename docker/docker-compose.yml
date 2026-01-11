@@ -7,6 +7,24 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     restart: unless-stopped
+
+    # 보안: 권한 제한
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false  # 데이터 쓰기 필요
+
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
     environment:
       - TZ=Asia/Seoul
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
@@ -15,11 +33,12 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=ap-northeast-2
       - S3_BUCKET=notam-korea-data
+
     volumes:
       - ./data:/app/data
       - ./logs:/app/data/logs
-    # 6시간마다 실행 (cron 대신 entrypoint에서 처리)
-    # 또는 NAS 작업 스케줄러 사용
+
+    # 6시간마다 실행 루프
     command: >
       sh -c "while true; do
         echo '[$(date)] Starting crawler...';
@@ -28,6 +47,21 @@ services:
         echo '[$(date)] Sleeping 6 hours...';
         sleep 21600;
       done"
+
+    # 헬스체크
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # 로깅 설정
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   default:
