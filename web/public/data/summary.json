@@ -12,8 +12,8 @@
     },
     "ikea": {
       "name": "IKEA",
-      "total": 437,
-      "exported": 437
+      "total": 479,
+      "exported": 479
     },
     "oliveyoung": {
       "name": "올리브영",
@@ -31,5 +31,5 @@
       "exported": 233
     }
   },
-  "total_products": 6827
+  "total_products": 6869
 }
