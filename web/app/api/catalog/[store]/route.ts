@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 
+export const dynamic = 'force-dynamic'
+
 // 지원하는 매장 목록
 const VALID_STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
 
