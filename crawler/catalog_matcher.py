@@ -18,9 +18,13 @@ except ImportError:
 
 # 상수 정의
 MAX_PRODUCTS_PER_VIDEO = 10
-MIN_MATCH_SCORE = 0.25
+MIN_MATCH_SCORE = 0.50  # 0.25에서 0.50으로 상향 (정확도 개선)
+MIN_KEYWORD_MATCHES = 2  # 최소 2개 키워드 매칭 필요
 MAX_KEYWORD_LENGTH = 50
 MAX_NAME_LENGTH = 200
+
+# 불용어 (매칭에서 제외)
+STOPWORDS = {'상품', '제품', '용품', '신상', '추천', '꿀템', '필수템', '인기', '베스트', '세트', '대용량'}
 
 
 def _sanitize_text(text: Optional[str], max_length: int = 10000) -> str:
@@ -41,8 +45,19 @@ def extract_keywords(name: Optional[str]) -> List[str]:
     # 불필요 문자 제거
     clean = re.sub(r'[\[\]\(\)\d+ml\d+g\d+p\d+개입]', ' ', name.lower())
     clean = re.sub(r'\s+', ' ', clean).strip()
-    words = [w[:MAX_KEYWORD_LENGTH] for w in clean.split() if 2 <= len(w) <= MAX_KEYWORD_LENGTH]
+    words = [w[:MAX_KEYWORD_LENGTH] for w in clean.split()
+             if 2 <= len(w) <= MAX_KEYWORD_LENGTH and w not in STOPWORDS]
     return words
+
+
+def get_keyword_weight(keyword: str) -> float:
+    """키워드 중요도 계산 (긴 키워드일수록 구체적)"""
+    if len(keyword) >= 4:
+        return 1.5  # 4글자 이상 키워드는 가중치
+    elif len(keyword) >= 3:
+        return 1.0
+    else:
+        return 0.5  # 2글자는 낮은 가중치
 
 def run_catalog_matching() -> int:
     """카탈로그 매칭 실행
@@ -99,15 +114,29 @@ def run_catalog_matching() -> int:
         for item in catalog_items:
             if not item['keywords']:
                 continue
-            # 키워드 매칭
+            # 키워드 매칭 (가중치 적용)
             matched_keywords = [kw for kw in item['keywords'] if kw in combined]
-            if len(matched_keywords) >= 1:  # 1개만 매칭되어도 OK
-                score = len(matched_keywords) / max(len(item['keywords']), 1)
-                # 제목에 매칭되면 보너스
-                title_match = any(kw in title for kw in matched_keywords)
-                if title_match:
-                    score += 0.3
-                matches.append((score, item, matched_keywords))
+
+            # 최소 키워드 매칭 수 체크
+            if len(matched_keywords) < MIN_KEYWORD_MATCHES:
+                continue
+
+            # 가중치 기반 점수 계산
+            total_weight = sum(get_keyword_weight(kw) for kw in item['keywords'])
+            matched_weight = sum(get_keyword_weight(kw) for kw in matched_keywords)
+            score = matched_weight / max(total_weight, 1)
+
+            # 제목에 매칭되면 보너스 (높은 신뢰도)
+            title_matches = [kw for kw in matched_keywords if kw in title]
+            if title_matches:
+                score += 0.2 * len(title_matches)
+
+            # 영상에서 여러 번 언급되면 보너스
+            mention_count = sum(combined.count(kw) for kw in matched_keywords)
+            if mention_count >= 3:
+                score += 0.15
+
+            matches.append((score, item, matched_keywords))
 
         # 점수 높은 순, 상위 N개
         matches.sort(key=lambda x: x[0], reverse=True)

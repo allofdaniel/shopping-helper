@@ -93,7 +93,7 @@ class S3Uploader:
             if product.get('keywords'):
                 try:
                     product['keywords'] = json.loads(product['keywords'])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     product['keywords'] = []
             else:
                 product['keywords'] = []

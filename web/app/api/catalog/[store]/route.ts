@@ -7,6 +7,41 @@ export const dynamic = 'force-dynamic'
 // 지원하는 매장 목록
 const VALID_STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
 
+// 입력값 제한
+const MAX_LIMIT = 100
+const DEFAULT_LIMIT = 50
+const MAX_SEARCH_LENGTH = 100
+const MAX_CATEGORY_LENGTH = 50
+
+// 입력값 검증 함수
+function validateAndSanitizeParams(searchParams: URLSearchParams) {
+  // limit 검증 (1-100)
+  let limit = parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT))
+  if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT
+  if (limit > MAX_LIMIT) limit = MAX_LIMIT
+
+  // offset 검증 (0 이상)
+  let offset = parseInt(searchParams.get('offset') || '0')
+  if (isNaN(offset) || offset < 0) offset = 0
+
+  // search 검증 (길이 제한 및 특수문자 제거)
+  let search = searchParams.get('search')?.toLowerCase().trim()
+  if (search) {
+    search = search.slice(0, MAX_SEARCH_LENGTH)
+    // SQL 인젝션 방지용 특수문자 제거 (JSON 필터링이므로 큰 위험은 없지만 방어적 코딩)
+    search = search.replace(/[<>'"`;]/g, '')
+  }
+
+  // category 검증
+  let category = searchParams.get('category')?.trim()
+  if (category) {
+    category = category.slice(0, MAX_CATEGORY_LENGTH)
+    category = category.replace(/[<>'"`;]/g, '')
+  }
+
+  return { limit, offset, search, category }
+}
+
 // JSON 데이터 캐시
 const dataCache: Record<string, { products: any[]; total: number; loadedAt: number }> = {}
 const CACHE_TTL = 5 * 60 * 1000 // 5분
@@ -47,10 +82,8 @@ export async function GET(
     const store = params.store
     const { searchParams } = new URL(request.url)
 
-    const search = searchParams.get('search')?.toLowerCase()
-    const category = searchParams.get('category')
-    const limit = parseInt(searchParams.get('limit') || '50')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    // 검증된 파라미터 사용
+    const { limit, offset, search, category } = validateAndSanitizeParams(searchParams)
 
     // 매장 유효성 검사
     if (!VALID_STORES.includes(store)) {

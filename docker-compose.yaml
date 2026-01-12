@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  youtube-collector:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    container_name: youtube-collector
+    restart: unless-stopped
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TZ=Asia/Seoul
+    volumes:
+      - ./data:/app/data
+      - ./crawler/data/logs:/app/data/logs
+    command: ["python", "continuous_collector.py", "--mode", "schedule"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sqlite3; sqlite3.connect('/app/data/products.db').execute('SELECT 1')"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+
+  # 일회성 수집 (누락된 매장)
+  collect-missing:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    container_name: collect-missing
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TZ=Asia/Seoul
+    volumes:
+      - ./data:/app/data
+    command: ["python", "continuous_collector.py", "--mode", "missing"]
+    profiles:
+      - collect-once
+
+  # 특정 매장만 수집
+  collect-store:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    container_name: collect-store
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - STORE_KEY=${STORE_KEY:-oliveyoung}
+      - TZ=Asia/Seoul
+    volumes:
+      - ./data:/app/data
+    command: ["sh", "-c", "python continuous_collector.py --store $${STORE_KEY}"]
+    profiles:
+      - collect-store
+
+volumes:
+  data:

@@ -340,7 +340,7 @@ class ImprovedProductExtractor:
                 if isinstance(confidence, str):
                     try:
                         confidence = float(confidence)
-                    except:
+                    except (ValueError, TypeError):
                         confidence = 0.5
 
                 if confidence < min_confidence:
@@ -387,19 +387,19 @@ class ImprovedProductExtractor:
                 try:
                     num = float(price_str.replace("천", ""))
                     return int(num * 1000)
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    return None
             elif "만" in price_str:
                 try:
                     num = float(price_str.replace("만", ""))
                     return int(num * 10000)
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    return None
             else:
                 try:
                     return int(price_str)
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    return None
 
         return None
 
@@ -423,13 +423,13 @@ class ImprovedProductExtractor:
                         return int(parts[0]) * 60 + int(parts[1])
                     elif len(parts) == 3:
                         return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-                except:
-                    pass
+                except (ValueError, IndexError):
+                    return None
             else:
                 try:
                     return int(timestamp)
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    return None
 
         return None
 

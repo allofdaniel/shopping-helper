@@ -249,8 +249,8 @@ def crawl_convenience():
                         for _ in range(3):
                             more_btn.click()
                             page.wait_for_timeout(1500)
-                except:
-                    pass
+                except Exception:
+                    pass  # 더보기 버튼이 없거나 클릭 불가한 경우 무시
 
                 products = extract_cu_products(page)
 

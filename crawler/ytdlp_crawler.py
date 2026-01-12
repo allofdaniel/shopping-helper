@@ -227,7 +227,7 @@ class YTDLPCrawler:
         try:
             dt = datetime.strptime(date_str, '%Y%m%d')
             return dt.isoformat() + 'Z'
-        except:
+        except (ValueError, TypeError):
             return date_str
 
     def get_channel_videos_newest_first(self, channel_id: str = None, channel_handle: str = None,
@@ -290,8 +290,8 @@ class YTDLPCrawler:
                                     # 날짜순이므로 이후 영상도 오래된 것
                                     print(f"    (날짜 필터: {pub_date.date()} < {since_date.date()})")
                                     break
-                            except:
-                                pass
+                            except (ValueError, TypeError, AttributeError):
+                                pass  # 날짜 파싱 실패 시 필터링 무시
 
                         videos.append(video_info)
                         self.mark_as_collected(video_id)

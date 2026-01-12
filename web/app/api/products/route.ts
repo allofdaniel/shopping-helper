@@ -5,6 +5,44 @@ import path from 'path'
 export const dynamic = 'force-dynamic'
 
 const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
+const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating']
+const MAX_LIMIT = 200
+const DEFAULT_LIMIT = 100
+const MAX_SEARCH_LENGTH = 100
+
+// 입력값 검증 함수
+function validateParams(searchParams: URLSearchParams) {
+  // store 검증
+  const store = searchParams.get('store')
+  const validStore = (store && (STORES.includes(store) || store === 'all')) ? store : null
+
+  // sort 검증
+  const sort = searchParams.get('sort')
+  const validSort = (sort && VALID_SORTS.includes(sort)) ? sort : 'popular'
+
+  // limit 검증
+  let limit = parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT))
+  if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT
+  if (limit > MAX_LIMIT) limit = MAX_LIMIT
+
+  // offset 검증
+  let offset = parseInt(searchParams.get('offset') || '0')
+  if (isNaN(offset) || offset < 0) offset = 0
+
+  // search 검증
+  let search = searchParams.get('search')?.toLowerCase().trim()
+  if (search) {
+    search = search.slice(0, MAX_SEARCH_LENGTH).replace(/[<>'"`;]/g, '')
+  }
+
+  // category 검증
+  let category = searchParams.get('category')?.trim()
+  if (category) {
+    category = category.slice(0, 50).replace(/[<>'"`;]/g, '')
+  }
+
+  return { store: validStore, sort: validSort, limit, offset, search, category }
+}
 
 // 전체 상품 캐시
 let allProductsCache: any[] | null = null
@@ -59,12 +97,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
 
-    const store = searchParams.get('store')
-    const category = searchParams.get('category')
-    const search = searchParams.get('search')?.toLowerCase()
-    const sort = searchParams.get('sort') || 'popular'
-    const limit = parseInt(searchParams.get('limit') || '100')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    // 검증된 파라미터 사용
+    const { store, category, search, sort, limit, offset } = validateParams(searchParams)
 
     let products = await loadAllProducts()
 

@@ -137,8 +137,8 @@ class DaisoMallScraper:
                         await search_input.fill(query)
                         await search_input.press('Enter')
                         await asyncio.sleep(3)
-                except:
-                    pass
+                except Exception:
+                    pass  # 검색 팝업이 없는 경우 무시
 
             # 결과 파싱
             products = await self._parse_search_results(limit)

@@ -470,8 +470,8 @@ def run_oliveyoung_api_crawl():
                         if product['product_no'] and product['name']:
                             all_products.append(product)
                     print(f'    -> {len(items)}개')
-                except:
-                    print(f'    JSON 파싱 실패')
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    print(f'    JSON 파싱 실패: {e}')
             else:
                 print(f'    HTTP {resp.status_code}')
         except Exception as e:
