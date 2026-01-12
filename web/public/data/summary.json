@@ -1,0 +1,35 @@
+{
+  "stores": {
+    "daiso": {
+      "name": "다이소",
+      "total": 2999,
+      "exported": 2999
+    },
+    "costco": {
+      "name": "Costco",
+      "total": 1233,
+      "exported": 1233
+    },
+    "ikea": {
+      "name": "IKEA",
+      "total": 437,
+      "exported": 437
+    },
+    "oliveyoung": {
+      "name": "올리브영",
+      "total": 148,
+      "exported": 148
+    },
+    "traders": {
+      "name": "트레이더스",
+      "total": 1777,
+      "exported": 1777
+    },
+    "convenience": {
+      "name": "편의점",
+      "total": 233,
+      "exported": 233
+    }
+  },
+  "total_products": 6827
+}
