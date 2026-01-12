@@ -101,12 +101,30 @@ def main():
                 'exported': data['exported']
             }
 
+    # YouTube 데이터 내보내기
+    print("\nYouTube products...")
+    yt_products = export_table(cur, 'products', 'youtube_products')
+    if yt_products:
+        output_file = OUTPUT_DIR / 'youtube_products.json'
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(yt_products, f, ensure_ascii=False, indent=2)
+        print(f"  Exported: {yt_products['exported']}/{yt_products['total']} products")
+        summary['youtube'] = {'name': 'YouTube 추천템', 'total': yt_products['total']}
+
+    print("\nYouTube videos...")
+    yt_videos = export_table(cur, 'videos', 'youtube_videos')
+    if yt_videos:
+        output_file = OUTPUT_DIR / 'youtube_videos.json'
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(yt_videos, f, ensure_ascii=False, indent=2)
+        print(f"  Exported: {yt_videos['exported']}/{yt_videos['total']} videos")
+
     # 요약 파일 저장
     summary_file = OUTPUT_DIR / 'summary.json'
     with open(summary_file, 'w', encoding='utf-8') as f:
         json.dump({
             'stores': summary,
-            'total_products': sum(s['total'] for s in summary.values())
+            'total_products': sum(s.get('total', 0) for s in summary.values())
         }, f, ensure_ascii=False, indent=2)
 
     conn.close()
