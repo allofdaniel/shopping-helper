@@ -1,211 +1,122 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { promises as fs } from 'fs'
 import path from 'path'
-import Database from 'better-sqlite3'
 
-// DB 경로 설정
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), '..', 'data', 'products.db')
+const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
 
-interface ProductRow {
-  id: number
-  video_id: string
-  name: string
-  price: number | null
-  category: string | null
-  reason: string | null
-  timestamp_sec: number | null
-  keywords: string | null
-  store_key: string
-  store_name: string
-  official_code: string | null
-  official_name: string | null
-  official_price: number | null
-  official_image_url: string | null
-  official_product_url: string | null
-  is_matched: number
-  is_approved: number
-  is_hidden: number
-  source_view_count: number | null
-  created_at: string
-  video_title: string | null
-  channel_title: string | null
+// 전체 상품 캐시
+let allProductsCache: any[] | null = null
+let cacheLoadedAt = 0
+const CACHE_TTL = 5 * 60 * 1000
+
+async function loadAllProducts() {
+  if (allProductsCache && Date.now() - cacheLoadedAt < CACHE_TTL) {
+    return allProductsCache
+  }
+
+  const allProducts: any[] = []
+
+  for (const store of STORES) {
+    try {
+      const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
+      const content = await fs.readFile(jsonPath, 'utf-8')
+      const data = JSON.parse(content)
+
+      if (data.products) {
+        for (const product of data.products) {
+          allProducts.push({
+            ...product,
+            store_key: store,
+            store_name: getStoreName(store),
+          })
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to load ${store}:`, error)
+    }
+  }
+
+  allProductsCache = allProducts
+  cacheLoadedAt = Date.now()
+  return allProducts
+}
+
+function getStoreName(key: string): string {
+  const names: Record<string, string> = {
+    daiso: '다이소',
+    costco: 'Costco',
+    oliveyoung: '올리브영',
+    traders: '트레이더스',
+    ikea: 'IKEA',
+    convenience: '편의점',
+  }
+  return names[key] || key
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
 
-    // 쿼리 파라미터
     const store = searchParams.get('store')
     const category = searchParams.get('category')
-    const search = searchParams.get('search')
+    const search = searchParams.get('search')?.toLowerCase()
     const sort = searchParams.get('sort') || 'popular'
     const limit = parseInt(searchParams.get('limit') || '100')
     const offset = parseInt(searchParams.get('offset') || '0')
-    const includeHidden = searchParams.get('includeHidden') === 'true'
 
-    // DB 연결
-    let db: Database.Database
-    try {
-      db = new Database(DB_PATH, { readonly: true })
-    } catch (dbError) {
-      console.error('Database connection error:', dbError)
-      return NextResponse.json(
-        { error: 'Database not available', products: [] },
-        { status: 503 }
-      )
-    }
-
-    // 기본 쿼리
-    let query = `
-      SELECT
-        p.id,
-        p.video_id,
-        p.name,
-        p.price,
-        p.category,
-        p.reason,
-        p.timestamp_sec,
-        p.keywords,
-        p.store_key,
-        p.store_name,
-        p.official_code,
-        p.official_name,
-        p.official_price,
-        p.official_image_url,
-        p.official_product_url,
-        p.is_matched,
-        p.is_approved,
-        p.is_hidden,
-        p.source_view_count,
-        p.created_at,
-        v.title as video_title,
-        v.channel_title
-      FROM products p
-      LEFT JOIN videos v ON p.video_id = v.video_id
-      WHERE 1=1
-    `
-
-    const params: (string | number)[] = []
-
-    // 숨김 상품 제외 (기본)
-    if (!includeHidden) {
-      query += ` AND (p.is_hidden = 0 OR p.is_hidden IS NULL)`
-    }
+    let products = await loadAllProducts()
 
     // 매장 필터
     if (store && store !== 'all') {
-      query += ` AND p.store_key = ?`
-      params.push(store)
+      products = products.filter(p => p.store_key === store)
     }
 
     // 카테고리 필터
     if (category && category !== 'all') {
-      query += ` AND p.category = ?`
-      params.push(category)
+      products = products.filter(p =>
+        p.category?.toLowerCase().includes(category.toLowerCase())
+      )
     }
 
     // 검색
     if (search) {
-      query += ` AND (
-        p.name LIKE ? OR
-        p.official_name LIKE ? OR
-        p.keywords LIKE ? OR
-        v.channel_title LIKE ?
-      )`
-      const searchTerm = `%${search}%`
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm)
+      products = products.filter(p =>
+        p.name?.toLowerCase().includes(search) ||
+        p.brand?.toLowerCase().includes(search) ||
+        p.category?.toLowerCase().includes(search)
+      )
     }
 
     // 정렬
     switch (sort) {
-      case 'popular':
-        query += ` ORDER BY p.source_view_count DESC NULLS LAST`
-        break
-      case 'newest':
-        query += ` ORDER BY p.created_at DESC`
-        break
       case 'price_low':
-        query += ` ORDER BY COALESCE(p.official_price, p.price) ASC NULLS LAST`
+        products = [...products].sort((a, b) => (a.price || 0) - (b.price || 0))
         break
       case 'price_high':
-        query += ` ORDER BY COALESCE(p.official_price, p.price) DESC NULLS LAST`
+        products = [...products].sort((a, b) => (b.price || 0) - (a.price || 0))
+        break
+      case 'newest':
+        products = [...products].sort((a, b) =>
+          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        )
+        break
+      case 'rating':
+        products = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0))
         break
       default:
-        query += ` ORDER BY p.source_view_count DESC NULLS LAST`
+        // popular - 기본 순서 유지
+        break
     }
 
-    // 페이지네이션
-    query += ` LIMIT ? OFFSET ?`
-    params.push(limit, offset)
-
-    // 쿼리 실행
-    const rows = db.prepare(query).all(...params) as ProductRow[]
-
-    // 총 개수 쿼리
-    let countQuery = `
-      SELECT COUNT(*) as total
-      FROM products p
-      LEFT JOIN videos v ON p.video_id = v.video_id
-      WHERE 1=1
-    `
-    const countParams: (string | number)[] = []
-
-    if (!includeHidden) {
-      countQuery += ` AND (p.is_hidden = 0 OR p.is_hidden IS NULL)`
-    }
-    if (store && store !== 'all') {
-      countQuery += ` AND p.store_key = ?`
-      countParams.push(store)
-    }
-    if (category && category !== 'all') {
-      countQuery += ` AND p.category = ?`
-      countParams.push(category)
-    }
-    if (search) {
-      countQuery += ` AND (p.name LIKE ? OR p.official_name LIKE ? OR p.keywords LIKE ? OR v.channel_title LIKE ?)`
-      const searchTerm = `%${search}%`
-      countParams.push(searchTerm, searchTerm, searchTerm, searchTerm)
-    }
-
-    const countResult = db.prepare(countQuery).get(...countParams) as { total: number }
-    const total = countResult?.total || 0
-
-    db.close()
-
-    // 응답 변환
-    const products = rows.map(row => ({
-      id: row.id,
-      video_id: row.video_id,
-      name: row.name,
-      price: row.price,
-      category: row.category || '기타',
-      reason: row.reason || '',
-      timestamp_sec: row.timestamp_sec,
-      timestamp_text: row.timestamp_sec ? formatTimestamp(row.timestamp_sec) : null,
-      recommendation_quote: null,
-      keywords: row.keywords ? JSON.parse(row.keywords) : [],
-      store_key: row.store_key,
-      store_name: row.store_name,
-      official_code: row.official_code,
-      official_name: row.official_name,
-      official_price: row.official_price,
-      official_image_url: row.official_image_url,
-      official_product_url: row.official_product_url,
-      is_matched: row.is_matched === 1,
-      is_approved: row.is_approved === 1,
-      source_view_count: row.source_view_count || 0,
-      created_at: row.created_at,
-      video_title: row.video_title,
-      channel_title: row.channel_title,
-      thumbnail_url: `https://img.youtube.com/vi/${row.video_id}/mqdefault.jpg`,
-    }))
+    const total = products.length
+    const paginated = products.slice(offset, offset + limit)
 
     return NextResponse.json({
-      products,
+      products: paginated,
       total,
       limit,
       offset,
-      hasMore: offset + products.length < total,
+      hasMore: offset + paginated.length < total,
     })
 
   } catch (error) {
@@ -215,10 +126,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-function formatTimestamp(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
 }

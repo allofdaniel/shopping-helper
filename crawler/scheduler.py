@@ -55,6 +55,12 @@ try:
 except ImportError:
     HAS_S3 = False
 
+try:
+    from data_validator import DataValidator
+    HAS_VALIDATOR = True
+except ImportError:
+    HAS_VALIDATOR = False
+
 
 # 로깅 설정
 LOG_DIR = DATA_DIR / "logs"
@@ -174,9 +180,36 @@ class Scheduler:
             logger.error(f"S3 업로드 오류: {e}")
             return None
 
+    def validate_data(self):
+        """데이터 무결성 검증"""
+        if not HAS_VALIDATOR:
+            logger.warning("data_validator 모듈 없음, 스킵")
+            return None
+
+        logger.info("=== 데이터 무결성 검증 시작 ===")
+        try:
+            validator = DataValidator()
+            results = validator.validate_all()
+
+            all_valid = all(r.get('valid', False) for r in results.values())
+
+            if all_valid:
+                logger.info("데이터 검증 통과 - 모든 데이터 정상")
+            else:
+                logger.warning("데이터 검증 문제 발견!")
+                for source, data in results.items():
+                    for issue in data.get('issues', []):
+                        logger.warning(f"  {source}: [{issue[0]}] {issue[1]}")
+
+            logger.info("=== 데이터 검증 완료 ===")
+            return {'valid': all_valid, 'results': results}
+        except Exception as e:
+            logger.error(f"데이터 검증 오류: {e}")
+            return None
+
     def run_collection(self, store_keys: list = None, max_videos: int = 30,
                        update_catalog: bool = True, extract_products: bool = True,
-                       upload_s3: bool = True):
+                       upload_s3: bool = True, validate: bool = True):
         """
         수집 실행
 
@@ -186,6 +219,7 @@ class Scheduler:
             update_catalog: 카탈로그 업데이트 여부
             extract_products: 상품 추출 여부
             upload_s3: S3 업로드 여부
+            validate: 데이터 무결성 검증 여부
         """
         if store_keys is None:
             store_keys = list(STORE_CATEGORIES.keys())
@@ -199,6 +233,7 @@ class Scheduler:
             "catalog": {},
             "products_extracted": 0,
             "s3_upload": None,
+            "validation": None,
             "errors": []
         }
 
@@ -242,6 +277,10 @@ class Scheduler:
         if upload_s3:
             results["s3_upload"] = self.upload_to_s3()
 
+        # 5. 데이터 무결성 검증 (선택적)
+        if validate:
+            results["validation"] = self.validate_data()
+
         # 결과 저장
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -260,6 +299,10 @@ class Scheduler:
         logger.info(f"소요 시간: {duration:.1f}초")
         logger.info(f"처리된 매장: {len(results['stores'])}개")
         logger.info(f"추출된 상품: {results['products_extracted']}개")
+
+        if results.get("validation"):
+            validation_status = "통과" if results["validation"].get("valid") else "문제 발견"
+            logger.info(f"데이터 검증: {validation_status}")
 
         if results["errors"]:
             logger.warning(f"오류 {len(results['errors'])}건: {results['errors']}")

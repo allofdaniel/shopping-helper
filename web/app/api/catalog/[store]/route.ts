@@ -1,18 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { promises as fs } from 'fs'
 import path from 'path'
-import Database from 'better-sqlite3'
 
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), '..', 'data', 'products.db')
+// 지원하는 매장 목록
+const VALID_STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
 
-// 매장별 테이블 및 컬럼 매핑
-const CATALOG_CONFIG: Record<string, { table: string; idColumn: string; nameColumn: string }> = {
-  daiso: { table: 'daiso_catalog', idColumn: 'product_no', nameColumn: 'name' },
-  costco: { table: 'costco_catalog', idColumn: 'product_code', nameColumn: 'name' },
-  oliveyoung: { table: 'oliveyoung_catalog', idColumn: 'product_code', nameColumn: 'name' },
-  coupang: { table: 'coupang_catalog', idColumn: 'product_id', nameColumn: 'name' },
-  traders: { table: 'traders_catalog', idColumn: 'item_id', nameColumn: 'name' },
-  ikea: { table: 'ikea_catalog', idColumn: 'product_id', nameColumn: 'name' },
-  convenience: { table: 'convenience_catalog', idColumn: 'product_id', nameColumn: 'name' },
+// JSON 데이터 캐시
+const dataCache: Record<string, { products: any[]; total: number; loadedAt: number }> = {}
+const CACHE_TTL = 5 * 60 * 1000 // 5분
+
+async function loadStoreData(store: string) {
+  // 캐시 확인
+  const cached = dataCache[store]
+  if (cached && Date.now() - cached.loadedAt < CACHE_TTL) {
+    return cached
+  }
+
+  // JSON 파일 경로
+  const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
+
+  try {
+    const fileContent = await fs.readFile(jsonPath, 'utf-8')
+    const data = JSON.parse(fileContent)
+
+    const result = {
+      products: data.products || [],
+      total: data.total || data.products?.length || 0,
+      loadedAt: Date.now()
+    }
+
+    dataCache[store] = result
+    return result
+  } catch (error) {
+    console.error(`Failed to load ${store} data:`, error)
+    return { products: [], total: 0, loadedAt: Date.now() }
+  }
 }
 
 export async function GET(
@@ -23,73 +45,59 @@ export async function GET(
     const store = params.store
     const { searchParams } = new URL(request.url)
 
-    const search = searchParams.get('search')
+    const search = searchParams.get('search')?.toLowerCase()
+    const category = searchParams.get('category')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // 매장 설정 확인
-    const config = CATALOG_CONFIG[store]
-    if (!config) {
+    // 매장 유효성 검사
+    if (!VALID_STORES.includes(store)) {
       return NextResponse.json(
         { error: `Unknown store: ${store}`, products: [] },
         { status: 400 }
       )
     }
 
-    // DB 연결
-    let db: Database.Database
-    try {
-      db = new Database(DB_PATH, { readonly: true })
-    } catch (dbError) {
-      console.error('Database connection error:', dbError)
-      return NextResponse.json(
-        { error: 'Database not available', products: [] },
-        { status: 503 }
-      )
-    }
+    // 데이터 로드
+    const storeData = await loadStoreData(store)
 
-    // 테이블 존재 확인
-    const tableExists = db.prepare(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name=?
-    `).get(config.table)
-
-    if (!tableExists) {
-      db.close()
+    if (!storeData.products.length) {
       return NextResponse.json({
+        store,
         products: [],
         total: 0,
-        message: `Catalog table not found for ${store}`,
+        message: `No data available for ${store}`,
       })
     }
 
-    // 쿼리 구성
-    let query = `SELECT * FROM ${config.table} WHERE 1=1`
-    const queryParams: (string | number)[] = []
+    // 필터링
+    let filtered = storeData.products
 
     if (search) {
-      query += ` AND ${config.nameColumn} LIKE ?`
-      queryParams.push(`%${search}%`)
+      filtered = filtered.filter((p: any) =>
+        p.name?.toLowerCase().includes(search) ||
+        p.brand?.toLowerCase().includes(search)
+      )
     }
 
-    // 총 개수
-    const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as count')
-    const countResult = db.prepare(countQuery).get(...queryParams) as { count: number }
+    if (category) {
+      filtered = filtered.filter((p: any) =>
+        p.category?.toLowerCase().includes(category.toLowerCase())
+      )
+    }
+
+    const total = filtered.length
 
     // 페이지네이션
-    query += ` LIMIT ? OFFSET ?`
-    queryParams.push(limit, offset)
-
-    const products = db.prepare(query).all(...queryParams)
-
-    db.close()
+    const paginated = filtered.slice(offset, offset + limit)
 
     return NextResponse.json({
       store,
-      products,
-      total: countResult?.count || 0,
+      products: paginated,
+      total,
       limit,
       offset,
-      hasMore: offset + products.length < (countResult?.count || 0),
+      hasMore: offset + paginated.length < total,
     })
 
   } catch (error) {
