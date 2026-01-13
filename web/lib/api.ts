@@ -1,5 +1,7 @@
 import type { Product, Stats } from './types'
 
+// API v2 - Always use local API, no S3 fallback
+
 interface FetchProductsOptions {
   store?: string
   category?: string
