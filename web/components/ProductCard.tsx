@@ -42,10 +42,10 @@ export const ProductCard = memo(function ProductCard({
   const [showVideo, setShowVideo] = useState(false)
 
   // 이미지 URL: image_url (카탈로그) 또는 official_image_url (공식) 사용
-  // 다이소 등 핫링크 보호가 있는 사이트는 프록시 경유
+  // 다이소 등 핫링크 보호가 있는 사이트는 로컬 이미지 사용
   const rawImageUrl = product.image_url || product.official_image_url
   const imageUrl = !imgError && rawImageUrl
-    ? getProxiedImageUrl(rawImageUrl)
+    ? getProxiedImageUrl(rawImageUrl, product.product_no)
     : null
 
   // 타임스탬프 포맷팅
