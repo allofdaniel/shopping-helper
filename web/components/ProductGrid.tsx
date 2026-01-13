@@ -1,9 +1,10 @@
 'use client'
 
-import { Package, Heart } from 'lucide-react'
+import { Package, Heart, Loader2 } from 'lucide-react'
 import { ProductCard } from './ProductCard'
 import type { Product } from '@/lib/types'
 import type { TranslationKey } from '@/lib/i18n'
+import { useInfiniteScroll } from '@/lib/useInfiniteScroll'
 
 interface ProductGridProps {
   products: Product[]
@@ -36,16 +37,64 @@ interface ProductGridProps {
   t: (key: TranslationKey) => string
 }
 
-// 스켈레톤 UI
+// 스켈레톤 UI - Shimmer 효과 적용
 function ProductSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden animate-pulse">
-      <div className="aspect-[4/3] bg-gray-200 dark:bg-gray-700" />
-      <div className="p-3 space-y-2">
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+      {/* 이미지 영역 */}
+      <div className="relative aspect-[4/3] bg-gray-200 dark:bg-gray-700 overflow-hidden">
+        <div className="absolute inset-0 skeleton-shimmer" />
+        {/* 스토어 배지 스켈레톤 */}
+        <div className="absolute top-1.5 left-1.5 w-14 h-4 rounded-full bg-gray-300 dark:bg-gray-600" />
+        {/* 찜 버튼 스켈레톤 */}
+        <div className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-gray-300 dark:bg-gray-600" />
       </div>
+      {/* 정보 영역 */}
+      <div className="p-2 space-y-2">
+        {/* 상품명 */}
+        <div className="space-y-1">
+          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full skeleton-shimmer" />
+          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3 skeleton-shimmer" />
+        </div>
+        {/* 가격 + 품번 */}
+        <div className="flex items-center justify-between">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 skeleton-shimmer" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-12 skeleton-shimmer" />
+        </div>
+        {/* 채널 + 조회수 */}
+        <div className="flex items-center justify-between">
+          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded w-16 skeleton-shimmer" />
+          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded w-10 skeleton-shimmer" />
+        </div>
+      </div>
+      {/* Shimmer 애니메이션 스타일 */}
+      <style>{`
+        .skeleton-shimmer {
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.4) 50%,
+            transparent 100%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+        }
+        @media (prefers-color-scheme: dark) {
+          .skeleton-shimmer {
+            background: linear-gradient(
+              90deg,
+              transparent 0%,
+              rgba(255, 255, 255, 0.1) 50%,
+              transparent 100%
+            );
+            background-size: 200% 100%;
+          }
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
     </div>
   )
 }
@@ -193,22 +242,64 @@ export function ProductGrid({
     )
   }
 
-  // 상품 그리드
+  // 무한 스크롤 훅
+  const {
+    displayedItems,
+    hasMore,
+    isLoadingMore,
+    loaderRef,
+  } = useInfiniteScroll({
+    items: products,
+    pageSize: 20,
+    rootMargin: '400px', // 화면 하단 400px 전에 미리 로딩
+  })
+
+  // 상품 그리드 + 무한 스크롤
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {products.map((product: Product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          isInWishlist={isInWishlist(product.id)}
-          onToggleWishlist={onToggleWishlist}
-          isInCompare={isInCompare(product.id)}
-          onToggleCompare={onToggleCompare}
-          compareCount={compareCount}
-          maxCompare={maxCompare}
-          onShare={() => onShare(product)}
-        />
-      ))}
-    </div>
+    <>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {displayedItems.map((product: Product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            isInWishlist={isInWishlist(product.id)}
+            onToggleWishlist={onToggleWishlist}
+            isInCompare={isInCompare(product.id)}
+            onToggleCompare={onToggleCompare}
+            compareCount={compareCount}
+            maxCompare={maxCompare}
+            onShare={() => onShare(product)}
+          />
+        ))}
+      </div>
+
+      {/* 무한 스크롤 로더 */}
+      {hasMore && (
+        <div
+          ref={loaderRef}
+          className="flex items-center justify-center py-8"
+        >
+          <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500">
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">로딩 중...</span>
+              </>
+            ) : (
+              <span className="text-sm">스크롤하여 더 보기</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 전체 로드 완료 */}
+      {!hasMore && products.length > 20 && (
+        <div className="flex items-center justify-center py-6">
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            모든 상품을 불러왔습니다 ({products.length}개)
+          </span>
+        </div>
+      )}
+    </>
   )
 }

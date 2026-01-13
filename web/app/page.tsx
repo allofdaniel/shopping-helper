@@ -14,6 +14,7 @@ import { ScrollTopButton } from '@/components/ScrollTopButton'
 import { AdvancedFilterDrawer } from '@/components/AdvancedFilterDrawer'
 import { ComparePanel, CompareFab } from '@/components/ComparePanel'
 import { ShoppingMode } from '@/components/ShoppingMode'
+import { PullToRefreshIndicator } from '@/components/PullToRefresh'
 
 // Libs & Types
 import { fetchProducts } from '@/lib/api'
@@ -26,6 +27,7 @@ import { useTheme } from '@/lib/useTheme'
 import { useShare } from '@/lib/useShare'
 import { useChecklist } from '@/lib/useChecklist'
 import { useLocale } from '@/lib/i18n'
+import { usePullToRefresh } from '@/lib/usePullToRefresh'
 
 // Constants
 const CATEGORY_KEYS = ['all', 'kitchen', 'living', 'beauty', 'interior', 'food', 'digital'] as const
@@ -75,6 +77,14 @@ export default function Home() {
     refetchOnWindowFocus: false,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  })
+
+  // Pull-to-Refresh (모바일)
+  const { pullDistance, isRefreshing } = usePullToRefresh({
+    onRefresh: async () => {
+      await refetch()
+    },
+    disabled: isFetching,
   })
 
   // Advanced Filters
@@ -187,6 +197,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 transition-colors duration-300">
+      {/* Pull-to-Refresh 인디케이터 */}
+      <PullToRefreshIndicator
+        pullDistance={pullDistance}
+        isRefreshing={isRefreshing}
+      />
+
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-sm transition-colors">
         {/* Logo + Search + Actions */}

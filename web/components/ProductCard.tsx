@@ -34,6 +34,7 @@ export const ProductCard = memo(function ProductCard({
   const store = STORES[product.store_key]
   const hasOfficialInfo = product.official_product_url
   const [imgError, setImgError] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
@@ -144,15 +145,25 @@ export const ProductCard = memo(function ProductCard({
                    focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
       >
         {/* 이미지 영역 */}
-        <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-700">
+        <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-700 overflow-hidden">
           {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={product.name}
-              className="w-full h-full object-contain p-1"
-              onError={() => setImgError(true)}
-              loading="lazy"
-            />
+            <>
+              {/* 이미지 로딩 중 스켈레톤 */}
+              {!imgLoaded && (
+                <div className="absolute inset-0 bg-gray-200 dark:bg-gray-600 animate-pulse" />
+              )}
+              <img
+                src={imageUrl}
+                alt={product.name}
+                className={`w-full h-full object-contain p-1 transition-opacity duration-300 ${
+                  imgLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+                onError={() => setImgError(true)}
+                onLoad={() => setImgLoaded(true)}
+                loading="lazy"
+                decoding="async"
+              />
+            </>
           ) : (
             <div className="relative w-full h-full">
               <img
@@ -160,6 +171,7 @@ export const ProductCard = memo(function ProductCard({
                 alt={product.name}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                decoding="async"
               />
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                 <Play className="w-8 h-8 text-white" fill="white" />
