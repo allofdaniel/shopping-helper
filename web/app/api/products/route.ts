@@ -6,9 +6,12 @@ export const dynamic = 'force-dynamic'
 
 const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
 const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating']
-const MAX_LIMIT = 200
-const DEFAULT_LIMIT = 100
+const MAX_LIMIT = 10000
+const DEFAULT_LIMIT = 10000  // 전체 상품 반환 (클라이언트에서 필터링)
 const MAX_SEARCH_LENGTH = 100
+
+// Vercel 환경 감지
+const isVercel = process.env.VERCEL === '1'
 
 // 입력값 검증 함수
 function validateParams(searchParams: URLSearchParams) {
@@ -49,7 +52,40 @@ let allProductsCache: any[] | null = null
 let cacheLoadedAt = 0
 const CACHE_TTL = 5 * 60 * 1000
 
-async function loadAllProducts() {
+// HTTP로 JSON 파일 로드 (Vercel 환경)
+async function loadProductsViaHttp(store: string, baseUrl: string): Promise<any[]> {
+  try {
+    const response = await fetch(`${baseUrl}/data/${store}.json`, {
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      console.error(`HTTP fetch failed for ${store}: ${response.status}`)
+      return []
+    }
+
+    const data = await response.json()
+    return data.products || []
+  } catch (error) {
+    console.error(`Failed to fetch ${store} via HTTP:`, error)
+    return []
+  }
+}
+
+// 파일 시스템으로 JSON 로드 (로컬 환경)
+async function loadProductsViaFs(store: string): Promise<any[]> {
+  try {
+    const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
+    const content = await fs.readFile(jsonPath, 'utf-8')
+    const data = JSON.parse(content)
+    return data.products || []
+  } catch (error) {
+    console.error(`Failed to load ${store} via FS:`, error)
+    return []
+  }
+}
+
+async function loadAllProducts(baseUrl?: string) {
   if (allProductsCache && Date.now() - cacheLoadedAt < CACHE_TTL) {
     return allProductsCache
   }
@@ -57,27 +93,27 @@ async function loadAllProducts() {
   const allProducts: any[] = []
 
   for (const store of STORES) {
-    try {
-      const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
-      const content = await fs.readFile(jsonPath, 'utf-8')
-      const data = JSON.parse(content)
+    let products: any[] = []
 
-      if (data.products) {
-        for (const product of data.products) {
-          allProducts.push({
-            ...product,
-            store_key: store,
-            store_name: getStoreName(store),
-          })
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to load ${store}:`, error)
+    // Vercel 환경에서는 HTTP로, 로컬에서는 파일 시스템으로 로드
+    if (isVercel && baseUrl) {
+      products = await loadProductsViaHttp(store, baseUrl)
+    } else {
+      products = await loadProductsViaFs(store)
+    }
+
+    for (const product of products) {
+      allProducts.push({
+        ...product,
+        store_key: store,
+        store_name: getStoreName(store),
+      })
     }
   }
 
   allProductsCache = allProducts
   cacheLoadedAt = Date.now()
+  console.log(`[API] Loaded ${allProducts.length} products (Vercel: ${isVercel})`)
   return allProducts
 }
 
@@ -96,11 +132,13 @@ function getStoreName(key: string): string {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const url = new URL(request.url)
+    const baseUrl = `${url.protocol}//${url.host}`
 
     // 검증된 파라미터 사용
     const { store, category, search, sort, limit, offset } = validateParams(searchParams)
 
-    let products = await loadAllProducts()
+    let products = await loadAllProducts(baseUrl)
 
     // 매장 필터
     if (store && store !== 'all') {
