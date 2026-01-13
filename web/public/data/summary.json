@@ -1,39 +1,13 @@
 {
+  "updated_at": "2026-01-14T03:05:45.064600",
   "stores": {
-    "daiso": {
-      "name": "다이소",
-      "total": 3031,
-      "exported": 3031
-    },
-    "costco": {
-      "name": "Costco",
-      "total": 1233,
-      "exported": 1233
-    },
-    "ikea": {
-      "name": "IKEA",
-      "total": 479,
-      "exported": 479
-    },
-    "oliveyoung": {
-      "name": "올리브영",
-      "total": 148,
-      "exported": 148
-    },
-    "traders": {
-      "name": "트레이더스",
-      "total": 1777,
-      "exported": 1777
-    },
-    "convenience": {
-      "name": "편의점",
-      "total": 233,
-      "exported": 233
-    },
-    "youtube": {
-      "name": "YouTube 추천템",
-      "total": 1197
-    }
+    "daiso": 0,
+    "costco": 0,
+    "ikea": 0,
+    "oliveyoung": 0,
+    "traders": 0,
+    "convenience": 0
   },
-  "total_products": 8098
+  "total_videos": 464,
+  "total_youtube_products": 0
 }
