@@ -63,6 +63,46 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # 다이소 이미지 수집기
+  daiso-image-collector:
+    container_name: daiso-image-collector
+    image: mcr.microsoft.com/playwright/python:v1.40.0-jammy
+    restart: "no"
+
+    security_opt:
+      - no-new-privileges:true
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+    environment:
+      - TZ=Asia/Seoul
+      - DATA_PATH=/app/data/daiso.json
+      - IMAGE_DIR=/app/images/daiso
+      - GIT_REPO=${GIT_REPO}
+      - GIT_TOKEN=${GIT_TOKEN}
+
+    volumes:
+      - ../crawler/daiso_image_collector.py:/app/daiso_image_collector.py:ro
+      - ../web/public/data:/app/data:ro
+      - ./images/daiso:/app/images/daiso
+      - ../.git:/app/.git
+
+    working_dir: /app
+
+    command: >
+      sh -c "pip install playwright &&
+             python daiso_image_collector.py"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   default:
     name: shopping-helper-network

@@ -1,0 +1,19 @@
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+
+WORKDIR /app
+
+# Python 의존성
+RUN pip install --no-cache-dir playwright
+
+# 애플리케이션 코드
+COPY crawler/download_all_daiso_images.py /app/
+COPY web/public/data/daiso.json /app/data/
+
+# 이미지 저장 디렉토리
+RUN mkdir -p /app/images/daiso
+
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Seoul
+
+# 기본 명령
+CMD ["python", "download_all_daiso_images.py"]
