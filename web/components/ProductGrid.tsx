@@ -1,10 +1,13 @@
 'use client'
 
-import { Package, Heart, Loader2 } from 'lucide-react'
+import { Package, Heart, Loader2, Play, Eye } from 'lucide-react'
 import { ProductCard } from './ProductCard'
 import type { Product } from '@/lib/types'
+import { STORES } from '@/lib/types'
 import type { TranslationKey } from '@/lib/i18n'
 import { useInfiniteScroll } from '@/lib/useInfiniteScroll'
+import { formatPrice, getYoutubeThumbnail, formatViewCount } from '@/lib/api'
+import type { ViewMode } from './QuickFilters'
 
 interface ProductGridProps {
   products: Product[]
@@ -35,6 +38,9 @@ interface ProductGridProps {
 
   // 번역
   t: (key: TranslationKey) => string
+
+  // 뷰 모드
+  viewMode: ViewMode
 }
 
 // 스켈레톤 UI - Shimmer 효과 적용
@@ -183,6 +189,89 @@ function EmptyState({
   )
 }
 
+// 목록 뷰용 간소화된 아이템
+function ProductListItem({
+  product,
+  isInWishlist,
+  onToggleWishlist,
+}: {
+  product: Product
+  isInWishlist: boolean
+  onToggleWishlist: (id: number) => void
+}) {
+  const store = STORES[product.store_key]
+  const imageUrl = product.image_url || product.official_image_url
+
+  return (
+    <div className="flex items-center gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
+      {/* 썸네일 */}
+      <div className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={product.name}
+            className="w-full h-full object-contain"
+            loading="lazy"
+          />
+        ) : (
+          <div className="relative w-full h-full">
+            <img
+              src={getYoutubeThumbnail(product.video_id)}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <Play className="w-4 h-4 text-white" fill="white" />
+            </div>
+          </div>
+        )}
+        {/* 스토어 배지 */}
+        <span
+          className="absolute top-0.5 left-0.5 px-1 py-0.5 rounded text-white text-[8px] font-bold"
+          style={{ backgroundColor: store?.color || '#666' }}
+        >
+          {store?.icon}
+        </span>
+      </div>
+
+      {/* 상품 정보 */}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-xs text-gray-900 dark:text-white line-clamp-1">
+          {product.official_name || product.name}
+        </h3>
+        <p className="text-sm font-bold text-red-500 dark:text-red-400 mt-0.5">
+          {formatPrice(product.official_price || product.price)}
+        </p>
+        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+          <span className="truncate">{product.channel_title}</span>
+          {product.source_view_count > 0 && (
+            <span className="flex items-center gap-0.5 flex-shrink-0">
+              <Eye className="w-2.5 h-2.5" />
+              {formatViewCount(product.source_view_count)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 찜 버튼 */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleWishlist(product.id)
+        }}
+        className={`p-2 rounded-full transition-colors flex-shrink-0 ${
+          isInWishlist
+            ? 'bg-red-100 dark:bg-red-900/30 text-red-500'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-red-500'
+        }`}
+      >
+        <Heart className="w-4 h-4" fill={isInWishlist ? 'currentColor' : 'none'} />
+      </button>
+    </div>
+  )
+}
+
 export function ProductGrid({
   products,
   isLoading,
@@ -204,6 +293,7 @@ export function ProductGrid({
   onClearSearch,
   searchQuery,
   t,
+  viewMode,
 }: ProductGridProps) {
   // 로딩 스켈레톤
   if (isLoading) {
@@ -254,22 +344,39 @@ export function ProductGrid({
     rootMargin: '400px', // 화면 하단 400px 전에 미리 로딩
   })
 
+  // 뷰 모드에 따른 그리드 클래스
+  const gridClass = viewMode === 'large'
+    ? 'grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+    : viewMode === 'small'
+      ? 'grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+      : 'flex flex-col gap-1.5'
+
   // 상품 그리드 + 무한 스크롤
   return (
     <>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className={gridClass}>
         {displayedItems.map((product: Product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            isInWishlist={isInWishlist(product.id)}
-            onToggleWishlist={onToggleWishlist}
-            isInCompare={isInCompare(product.id)}
-            onToggleCompare={onToggleCompare}
-            compareCount={compareCount}
-            maxCompare={maxCompare}
-            onShare={() => onShare(product)}
-          />
+          viewMode === 'list' ? (
+            <ProductListItem
+              key={product.id}
+              product={product}
+              isInWishlist={isInWishlist(product.id)}
+              onToggleWishlist={onToggleWishlist}
+            />
+          ) : (
+            <ProductCard
+              key={product.id}
+              product={product}
+              isInWishlist={isInWishlist(product.id)}
+              onToggleWishlist={onToggleWishlist}
+              isInCompare={isInCompare(product.id)}
+              onToggleCompare={onToggleCompare}
+              compareCount={compareCount}
+              maxCompare={maxCompare}
+              onShare={() => onShare(product)}
+              compact={viewMode === 'small'}
+            />
+          )
         ))}
       </div>
 

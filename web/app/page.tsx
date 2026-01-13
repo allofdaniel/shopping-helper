@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 // Components
 import { SearchBar } from '@/components/SearchBar'
 import { HeaderActions } from '@/components/HeaderActions'
-import { QuickFilters } from '@/components/QuickFilters'
+import { QuickFilters, type ViewMode } from '@/components/QuickFilters'
 import { ProductGrid } from '@/components/ProductGrid'
 import { ResultsSummary } from '@/components/ResultsSummary'
 import { WishlistHeader } from '@/components/WishlistHeader'
@@ -51,6 +51,7 @@ export default function Home() {
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [showWishlistOnly, setShowWishlistOnly] = useState(false)
   const [showShoppingMode, setShowShoppingMode] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('large')
 
   // Hooks
   const { resolvedTheme, toggleTheme, mounted } = useTheme()
@@ -249,6 +250,8 @@ export default function Home() {
           setShowComparePanel={setShowComparePanel}
           onResetAll={handleResetAll}
           t={t}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
         />
 
         {/* Store Filter */}
@@ -346,6 +349,7 @@ export default function Home() {
           onClearSearch={handleClearSearch}
           searchQuery={searchQuery}
           t={t}
+          viewMode={viewMode}
         />
       </main>
 

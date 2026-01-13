@@ -15,6 +15,7 @@ interface ProductCardProps {
   compareCount?: number
   maxCompare?: number
   onShare?: () => void
+  compact?: boolean  // 작은 아이콘 뷰
 }
 
 // UX Law: Fitts's Law - 중요한 버튼은 크고 가까워야 함
@@ -30,6 +31,7 @@ export const ProductCard = memo(function ProductCard({
   compareCount = 0,
   maxCompare = 4,
   onShare,
+  compact = false,
 }: ProductCardProps) {
   const store = STORES[product.store_key]
   const hasOfficialInfo = product.official_product_url
@@ -39,8 +41,9 @@ export const ProductCard = memo(function ProductCard({
   const [copiedCode, setCopiedCode] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
 
-  const imageUrl = product.official_image_url && !imgError
-    ? product.official_image_url
+  // 이미지 URL: image_url (카탈로그) 또는 official_image_url (공식) 사용
+  const imageUrl = !imgError && (product.image_url || product.official_image_url)
+    ? (product.image_url || product.official_image_url)
     : null
 
   // 타임스탬프 포맷팅
@@ -138,11 +141,12 @@ export const ProductCard = memo(function ProductCard({
         role="button"
         tabIndex={0}
         aria-label={`${product.name}, ${store?.name}, ${formatPrice(product.official_price || product.price)}`}
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden cursor-pointer
+        className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden cursor-pointer
                    active:scale-[0.98] transition-transform duration-100
-                   hover:shadow-md dark:shadow-gray-900/50 min-h-[180px]
+                   hover:shadow-md dark:shadow-gray-900/50
                    border border-transparent dark:border-gray-700
-                   focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                   focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2
+                   ${compact ? 'min-h-[140px]' : 'min-h-[180px]'}`}
       >
         {/* 이미지 영역 */}
         <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-700 overflow-hidden">

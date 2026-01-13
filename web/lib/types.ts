@@ -22,6 +22,8 @@ export interface Product {
   official_price: number | null
   official_image_url: string | null
   official_product_url: string | null
+  image_url?: string | null  // 카탈로그 이미지 URL
+  product_url?: string | null  // 카탈로그 상품 URL
   is_matched: boolean
   is_approved: boolean
   source_view_count: number

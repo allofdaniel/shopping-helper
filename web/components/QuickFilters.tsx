@@ -1,6 +1,6 @@
 'use client'
 
-import { Scale } from 'lucide-react'
+import { Scale, Grid3X3, LayoutGrid, List } from 'lucide-react'
 import type { TranslationKey } from '@/lib/i18n'
 
 // 필터 아이콘
@@ -11,6 +11,8 @@ const FILTER_ICONS: Record<string, string> = {
   recommended: '',
   favorites: '',
 }
+
+export type ViewMode = 'large' | 'small' | 'list'
 
 interface QuickFiltersProps {
   sortBy: string
@@ -23,6 +25,8 @@ interface QuickFiltersProps {
   setShowComparePanel: (show: boolean) => void
   onResetAll: () => void
   t: (key: TranslationKey) => string
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
 }
 
 export function QuickFilters({
@@ -36,6 +40,8 @@ export function QuickFilters({
   setShowComparePanel,
   onResetAll,
   t,
+  viewMode,
+  setViewMode,
 }: QuickFiltersProps) {
   const QUICK_FILTER_KEYS = ['all', 'popular', 'new', 'recommended', 'favorites'] as const
 
@@ -95,6 +101,31 @@ export function QuickFilters({
           <span> {compareCount}</span>
         </button>
       )}
+
+      {/* 뷰 모드 버튼 그룹 */}
+      <div className="flex ml-auto border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+        <button
+          onClick={() => setViewMode('large')}
+          className={`p-1.5 transition-colors ${viewMode === 'large' ? 'bg-orange-500 text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+          title="큰 아이콘"
+        >
+          <LayoutGrid className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => setViewMode('small')}
+          className={`p-1.5 transition-colors border-x border-gray-200 dark:border-gray-700 ${viewMode === 'small' ? 'bg-orange-500 text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+          title="작은 아이콘"
+        >
+          <Grid3X3 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-orange-500 text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+          title="목록"
+        >
+          <List className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   )
 }
