@@ -3,6 +3,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
+  "env": {
+    "NEXT_PUBLIC_USE_S3_API": "false"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_USE_S3_API": "false"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
