@@ -213,7 +213,7 @@ function ProductListItem({
             className="w-full h-full object-contain"
             loading="lazy"
           />
-        ) : (
+        ) : product.video_id ? (
           <div className="relative w-full h-full">
             <img
               src={getYoutubeThumbnail(product.video_id)}
@@ -224,6 +224,10 @@ function ProductListItem({
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
               <Play className="w-4 h-4 text-white" fill="white" />
             </div>
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-600 dark:to-gray-700">
+            <Package className="w-6 h-6 text-gray-300 dark:text-gray-500" />
           </div>
         )}
         {/* 스토어 배지 */}

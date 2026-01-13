@@ -1,6 +1,6 @@
 'use client'
 
-import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2 } from 'lucide-react'
+import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2, ImageOff } from 'lucide-react'
 import type { Product, StoreLocation } from '@/lib/types'
 import { STORES } from '@/lib/types'
 import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount } from '@/lib/api'
@@ -168,7 +168,7 @@ export const ProductCard = memo(function ProductCard({
                 decoding="async"
               />
             </>
-          ) : (
+          ) : product.video_id ? (
             <div className="relative w-full h-full">
               <img
                 src={getYoutubeThumbnail(product.video_id)}
@@ -180,6 +180,11 @@ export const ProductCard = memo(function ProductCard({
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                 <Play className="w-8 h-8 text-white" fill="white" />
               </div>
+            </div>
+          ) : (
+            // 이미지 없는 카탈로그 상품용 플레이스홀더
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800">
+              <Package className="w-12 h-12 text-gray-300 dark:text-gray-500" />
             </div>
           )}
 
@@ -364,7 +369,7 @@ export const ProductCard = memo(function ProductCard({
 
             {/* 상품 이미지 / 영상 */}
             <div className="relative aspect-video bg-gray-100 dark:bg-gray-800">
-              {showVideo ? (
+              {showVideo && product.video_id ? (
                 // YouTube 임베드 플레이어
                 <iframe
                   src={`https://www.youtube.com/embed/${product.video_id}?autoplay=1&start=${product.timestamp_sec || 0}`}
@@ -380,16 +385,18 @@ export const ProductCard = memo(function ProductCard({
                     alt={product.name}
                     className="w-full h-full object-contain"
                   />
-                  {/* 영상 재생 버튼 오버레이 */}
-                  <button
-                    onClick={() => setShowVideo(true)}
-                    className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg"
-                  >
-                    <Play className="w-4 h-4" fill="white" />
-                    영상 보기
-                  </button>
+                  {/* 영상 재생 버튼 오버레이 - video_id 있을 때만 */}
+                  {product.video_id && (
+                    <button
+                      onClick={() => setShowVideo(true)}
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg"
+                    >
+                      <Play className="w-4 h-4" fill="white" />
+                      영상 보기
+                    </button>
+                  )}
                 </div>
-              ) : (
+              ) : product.video_id ? (
                 <div
                   className="relative w-full h-full cursor-pointer"
                   onClick={() => setShowVideo(true)}
@@ -407,6 +414,11 @@ export const ProductCard = memo(function ProductCard({
                   <span className="absolute bottom-2 left-2 text-white text-xs bg-black/70 px-2 py-1 rounded">
                     클릭하여 영상 재생
                   </span>
+                </div>
+              ) : (
+                // 이미지/영상 없는 카탈로그 상품
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800">
+                  <Package className="w-16 h-16 text-gray-300 dark:text-gray-500" />
                 </div>
               )}
             </div>
@@ -530,35 +542,37 @@ export const ProductCard = memo(function ProductCard({
                 </div>
               )}
 
-              {/* 섹션 5: 영상 정보 */}
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border dark:border-gray-700">
-                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-semibold text-sm mb-3">
-                  <Youtube className="w-4 h-4 text-red-500" />
-                  추천 영상 정보
-                </div>
-                <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border dark:border-gray-700">
-                  <p className="font-medium text-sm line-clamp-2 mb-2 text-gray-900 dark:text-white">
-                    {product.video_title || '영상 정보'}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                    <span className="flex items-center gap-1">
-                      👤 {product.channel_title || '채널 정보 없음'}
-                    </span>
-                    {product.source_view_count > 0 && (
+              {/* 섹션 5: 영상 정보 - video_id가 있을 때만 */}
+              {product.video_id && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-semibold text-sm mb-3">
+                    <Youtube className="w-4 h-4 text-red-500" />
+                    추천 영상 정보
+                  </div>
+                  <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border dark:border-gray-700">
+                    <p className="font-medium text-sm line-clamp-2 mb-2 text-gray-900 dark:text-white">
+                      {product.video_title || '영상 정보'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3" />
-                        {formatViewCount(product.source_view_count)}회
+                        👤 {product.channel_title || '채널 정보 없음'}
                       </span>
-                    )}
-                    {product.created_at && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(product.created_at)}
-                      </span>
-                    )}
+                      {product.source_view_count > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Eye className="w-3 h-3" />
+                          {formatViewCount(product.source_view_count)}회
+                        </span>
+                      )}
+                      {product.created_at && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(product.created_at)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* 섹션 6: 추가 정보 (키워드가 있을 때) */}
               {product.keywords && product.keywords.length > 0 && (
@@ -577,22 +591,24 @@ export const ProductCard = memo(function ProductCard({
               {/* CTA 버튼 - Fitts's Law: 큰 터치 영역 (최소 48px) */}
               {/* Hick's Law: 핵심 액션 2개만 표시 */}
               <div className="flex gap-3 pt-3 sticky bottom-0 bg-white dark:bg-gray-900 pb-2">
-                {/* 영상 재생/멈춤 토글 버튼 */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowVideo(!showVideo)
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-base font-bold transition-all shadow-lg ${
-                    showVideo
-                      ? 'bg-gray-600 hover:bg-gray-700 text-white'
-                      : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
-                  }`}
-                >
-                  <Play className="w-5 h-5" fill="white" />
-                  {showVideo ? '영상 멈춤' : '영상 재생'}
-                  {!showVideo && timestampDisplay && <span className="text-red-200 text-sm">({timestampDisplay})</span>}
-                </button>
+                {/* 영상 재생/멈춤 토글 버튼 - video_id 있을 때만 */}
+                {product.video_id && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowVideo(!showVideo)
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-base font-bold transition-all shadow-lg ${
+                      showVideo
+                        ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                        : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
+                    }`}
+                  >
+                    <Play className="w-5 h-5" fill="white" />
+                    {showVideo ? '영상 멈춤' : '영상 재생'}
+                    {!showVideo && timestampDisplay && <span className="text-red-200 text-sm">({timestampDisplay})</span>}
+                  </button>
+                )}
 
                 {/* 장바구니 담기 버튼 */}
                 {onToggleWishlist && (
@@ -611,9 +627,9 @@ export const ProductCard = memo(function ProductCard({
               </div>
 
               {/* 온라인 구매 링크 (있을 때만) */}
-              {hasOfficialInfo && (
+              {(product.official_product_url || product.product_url) && (
                 <a
-                  href={product.official_product_url!}
+                  href={product.official_product_url || product.product_url || ''}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
@@ -629,7 +645,7 @@ export const ProductCard = memo(function ProductCard({
               )}
 
               {/* 공식 상품 링크 (없을 때 대체) */}
-              {!hasOfficialInfo && (
+              {!product.official_product_url && !product.product_url && (
                 <p className="text-center text-xs text-gray-400 dark:text-gray-500">
                   📍 오프라인 매장에서 직접 확인해보세요!
                 </p>
