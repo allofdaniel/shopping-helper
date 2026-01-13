@@ -1,5 +1,7 @@
 // Service Worker for 꿀템장바구니 PWA
-const CACHE_NAME = 'honeycart-v1';
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = `honeycart-${CACHE_VERSION}`;
+const DATA_CACHE = `honeycart-data-${CACHE_VERSION}`;
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -7,84 +9,136 @@ const STATIC_ASSETS = [
   '/icon-512.png',
 ];
 
+// 데이터 파일 (오프라인 시 필수)
+const DATA_ASSETS = [
+  '/data/daiso.json',
+  '/data/costco.json',
+  '/data/ikea.json',
+  '/data/oliveyoung.json',
+  '/data/traders.json',
+  '/data/convenience.json',
+  '/data/summary.json',
+];
+
 // 설치 이벤트
 self.addEventListener('install', (event) => {
+  console.log('[SW] Installing service worker...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    Promise.all([
+      // 정적 자산 캐시
+      caches.open(CACHE_NAME).then((cache) => {
+        console.log('[SW] Caching static assets');
+        return cache.addAll(STATIC_ASSETS);
+      }),
+      // 데이터 파일 캐시 (오프라인 지원)
+      caches.open(DATA_CACHE).then((cache) => {
+        console.log('[SW] Caching data files for offline use');
+        return cache.addAll(DATA_ASSETS).catch((err) => {
+          console.log('[SW] Some data files not cached:', err);
+        });
+      }),
+    ])
   );
   self.skipWaiting();
 });
 
 // 활성화 이벤트
 self.addEventListener('activate', (event) => {
+  console.log('[SW] Activating service worker...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+          .filter((name) => name !== CACHE_NAME && name !== DATA_CACHE)
+          .filter((name) => name.startsWith('honeycart'))
+          .map((name) => {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
+          })
       );
     })
   );
   self.clients.claim();
 });
 
-// 페치 이벤트 - Network First 전략 (API 데이터는 항상 최신으로)
+// 페치 이벤트
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API 요청은 네트워크 우선
-  if (url.pathname.startsWith('/api') || url.hostname.includes('amazonaws.com')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // 성공 시 캐시에 저장
-          if (response.status === 200) {
-            const clonedResponse = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, clonedResponse);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // 오프라인 시 캐시에서 가져오기
-          return caches.match(request);
-        })
-    );
+  // 같은 origin만 처리
+  if (url.origin !== location.origin) {
     return;
   }
 
-  // 정적 자산은 캐시 우선
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // 백그라운드에서 업데이트
-        fetch(request).then((response) => {
-          if (response.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, response);
-            });
-          }
-        });
-        return cachedResponse;
-      }
+  // 데이터 파일 (/data/*.json) - Stale-While-Revalidate 전략
+  if (url.pathname.startsWith('/data/') && url.pathname.endsWith('.json')) {
+    event.respondWith(staleWhileRevalidate(request, DATA_CACHE));
+    return;
+  }
 
-      return fetch(request).then((response) => {
-        if (response.status === 200) {
-          const clonedResponse = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, clonedResponse);
-          });
-        }
-        return response;
-      });
-    })
-  );
+  // API 요청 - Network First 전략
+  if (url.pathname.startsWith('/api')) {
+    event.respondWith(networkFirst(request, DATA_CACHE));
+    return;
+  }
+
+  // 정적 자산 - Stale-While-Revalidate 전략
+  event.respondWith(staleWhileRevalidate(request, CACHE_NAME));
 });
+
+// Network First 전략 (항상 최신 데이터 시도)
+async function networkFirst(request, cacheName) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) {
+      console.log('[SW] Serving from cache (offline):', request.url);
+      return cached;
+    }
+    return new Response(JSON.stringify({ error: 'Offline', products: [] }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Stale-While-Revalidate 전략 (캐시 먼저 반환, 백그라운드 업데이트)
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+
+  // 백그라운드에서 네트워크 요청
+  const networkPromise = fetch(request).then((response) => {
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  }).catch(() => null);
+
+  // 캐시가 있으면 즉시 반환
+  if (cached) {
+    return cached;
+  }
+
+  // 캐시 없으면 네트워크 응답 대기
+  const networkResponse = await networkPromise;
+  if (networkResponse) {
+    return networkResponse;
+  }
+
+  // 오프라인 폴백
+  return new Response('오프라인 상태입니다', {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
+}
 
 // 푸시 알림 수신
 self.addEventListener('push', (event) => {
