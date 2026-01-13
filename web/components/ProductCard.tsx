@@ -3,7 +3,7 @@
 import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2, ImageOff } from 'lucide-react'
 import type { Product, StoreLocation } from '@/lib/types'
 import { STORES } from '@/lib/types'
-import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount } from '@/lib/api'
+import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl } from '@/lib/api'
 import { useState, useCallback, memo } from 'react'
 
 interface ProductCardProps {
@@ -42,8 +42,10 @@ export const ProductCard = memo(function ProductCard({
   const [showVideo, setShowVideo] = useState(false)
 
   // 이미지 URL: image_url (카탈로그) 또는 official_image_url (공식) 사용
-  const imageUrl = !imgError && (product.image_url || product.official_image_url)
-    ? (product.image_url || product.official_image_url)
+  // 다이소 등 핫링크 보호가 있는 사이트는 프록시 경유
+  const rawImageUrl = product.image_url || product.official_image_url
+  const imageUrl = !imgError && rawImageUrl
+    ? getProxiedImageUrl(rawImageUrl)
     : null
 
   // 타임스탬프 포맷팅

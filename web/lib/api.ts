@@ -84,3 +84,32 @@ export function formatViewCount(count: number): string {
   }
   return count.toString()
 }
+
+// 핫링크 보호가 필요한 도메인 목록
+const PROXY_REQUIRED_DOMAINS = [
+  'daisomall.co.kr',
+]
+
+/**
+ * 핫링크 보호가 있는 이미지 URL을 프록시 URL로 변환
+ * - 다이소몰 등 외부 요청을 차단하는 사이트의 이미지를 로드하기 위함
+ */
+export function getProxiedImageUrl(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl) return null
+
+  try {
+    const url = new URL(imageUrl)
+    const needsProxy = PROXY_REQUIRED_DOMAINS.some(domain => url.hostname.includes(domain))
+
+    if (needsProxy) {
+      // 프록시 API 경유
+      return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`
+    }
+
+    // 프록시 불필요 - 원본 URL 반환
+    return imageUrl
+  } catch {
+    // URL 파싱 실패 - 원본 반환
+    return imageUrl
+  }
+}

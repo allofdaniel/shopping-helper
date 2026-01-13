@@ -1,5 +1,5 @@
 // Service Worker for 꿀템장바구니 PWA
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `honeycart-${CACHE_VERSION}`;
 const DATA_CACHE = `honeycart-data-${CACHE_VERSION}`;
 const STATIC_ASSETS = [

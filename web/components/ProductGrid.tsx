@@ -6,7 +6,7 @@ import type { Product } from '@/lib/types'
 import { STORES } from '@/lib/types'
 import type { TranslationKey } from '@/lib/i18n'
 import { useInfiniteScroll } from '@/lib/useInfiniteScroll'
-import { formatPrice, getYoutubeThumbnail, formatViewCount } from '@/lib/api'
+import { formatPrice, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl } from '@/lib/api'
 import type { ViewMode } from './QuickFilters'
 
 interface ProductGridProps {
@@ -200,7 +200,9 @@ function ProductListItem({
   onToggleWishlist: (id: number) => void
 }) {
   const store = STORES[product.store_key]
-  const imageUrl = product.image_url || product.official_image_url
+  // 핫링크 보호가 있는 사이트 (다이소몰 등)는 프록시 경유
+  const rawImageUrl = product.image_url || product.official_image_url
+  const imageUrl = getProxiedImageUrl(rawImageUrl)
 
   return (
     <div className="flex items-center gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">

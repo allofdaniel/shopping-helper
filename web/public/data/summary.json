@@ -2,8 +2,8 @@
   "stores": {
     "daiso": {
       "name": "다이소",
-      "total": 2999,
-      "exported": 2999
+      "total": 3031,
+      "exported": 3031
     },
     "costco": {
       "name": "Costco",
@@ -35,5 +35,5 @@
       "total": 1197
     }
   },
-  "total_products": 8066
+  "total_products": 8098
 }
