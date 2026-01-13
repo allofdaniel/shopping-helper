@@ -39,7 +39,73 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).parent.parent / 'data' / 'products.db'
+DB_PATH = Path(__file__).parent / 'data' / 'products.db'
+
+
+def init_database():
+    """데이터베이스 테이블 초기화"""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    # videos 테이블
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS videos (
+            video_id TEXT PRIMARY KEY,
+            title TEXT,
+            channel_title TEXT,
+            channel_id TEXT,
+            description TEXT,
+            view_count INTEGER,
+            like_count INTEGER,
+            upload_date TEXT,
+            duration INTEGER,
+            thumbnail_url TEXT,
+            tags TEXT,
+            transcript TEXT,
+            store_key TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # youtube_products 테이블
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS youtube_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_id TEXT,
+            name TEXT,
+            price TEXT,
+            category TEXT,
+            store_key TEXT,
+            store_name TEXT,
+            view_count INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (video_id) REFERENCES videos(video_id)
+        )
+    ''')
+
+    # products 테이블 (기존 크롤러 호환)
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            price TEXT,
+            category TEXT,
+            store TEXT,
+            image_url TEXT,
+            product_url TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+    logger.info(f"Database initialized: {DB_PATH}")
+
+
+# 모듈 로드 시 DB 초기화
+init_database()
 
 
 @dataclass

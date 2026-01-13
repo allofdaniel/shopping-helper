@@ -29,13 +29,19 @@ sys.path.insert(0, str(BASE_DIR))
 
 from youtube_scraper import YouTubeScraper, run_full_collection
 
+# GitHub 동기화 (선택적)
+try:
+    from sync_to_github import main as sync_to_github
+except ImportError:
+    sync_to_github = None
+
 # SmartExtractor는 선택적 (Gemini API 필요)
 try:
     from improved_product_extractor import ImprovedProductExtractor as SmartExtractor
 except ImportError:
     SmartExtractor = None
 
-DB_PATH = BASE_DIR.parent / 'data' / 'products.db'
+DB_PATH = BASE_DIR / 'data' / 'products.db'
 
 # 수집 설정
 COLLECTION_CONFIG = {
@@ -275,8 +281,21 @@ class ContinuousCollector:
             schedule.every(interval).hours.do(self.collect_store, store_key)
             logger.info(f"  {store_key}: every {interval} hours")
 
+        # GitHub 동기화 스케줄 (6시간마다)
+        if sync_to_github:
+            schedule.every(6).hours.do(sync_to_github)
+            logger.info("  GitHub sync: every 6 hours")
+
         # 즉시 한 번 실행
         self.collect_all()
+
+        # 첫 동기화 실행
+        if sync_to_github:
+            logger.info("Running initial GitHub sync...")
+            try:
+                sync_to_github()
+            except Exception as e:
+                logger.error(f"Initial sync failed: {e}")
 
         # 스케줄 루프
         while True:

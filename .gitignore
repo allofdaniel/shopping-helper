@@ -43,3 +43,4 @@ data/
 null_price_products.txt
 tools/
 crawler/improved_products.json
+*.tar
