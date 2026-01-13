@@ -85,26 +85,29 @@ export function formatViewCount(count: number): string {
   return count.toString()
 }
 
-// 핫링크 보호로 외부 접근이 차단된 도메인
-// 이 도메인의 이미지는 null 반환하여 플레이스홀더 표시
-const BLOCKED_IMAGE_DOMAINS = [
-  'daisomall.co.kr',
-]
-
 /**
  * 이미지 URL 처리
- * - 핫링크 보호가 있는 사이트 (다이소몰 등)는 null 반환 → 플레이스홀더 표시
+ * - 다이소몰 이미지는 로컬에 다운로드된 이미지 사용 (/images/daiso/{product_no}.jpg)
  * - 그 외는 원본 URL 반환
  */
-export function getProxiedImageUrl(imageUrl: string | null | undefined): string | null {
+export function getProxiedImageUrl(imageUrl: string | null | undefined, productNo?: string | null): string | null {
   if (!imageUrl) return null
 
   try {
     const url = new URL(imageUrl)
-    const isBlocked = BLOCKED_IMAGE_DOMAINS.some(domain => url.hostname.includes(domain))
 
-    if (isBlocked) {
-      // 핫링크 보호로 차단된 도메인 - 플레이스홀더 표시
+    // 다이소몰 이미지 → 로컬 이미지 사용
+    if (url.hostname.includes('daisomall.co.kr')) {
+      // product_no가 제공되면 로컬 이미지 URL 반환
+      if (productNo) {
+        return `/images/daiso/${productNo}.jpg`
+      }
+      // URL에서 product_no 추출 시도 (예: /file/PD/.../1043198_00_00...)
+      const match = imageUrl.match(/(\d{5,10})_\d+_\d+/)
+      if (match) {
+        return `/images/daiso/${match[1]}.jpg`
+      }
+      // 추출 실패 시 null 반환 (플레이스홀더 표시)
       return null
     }
 
