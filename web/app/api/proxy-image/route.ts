@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'edge'
+// Node.js runtime 사용 (Edge 대신) - 헤더 처리가 더 안정적
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 // 허용된 도메인 목록 (보안을 위해)
 const ALLOWED_DOMAINS = [
@@ -8,13 +10,6 @@ const ALLOWED_DOMAINS = [
   'www.daisomall.co.kr',
   'image.daisomall.co.kr',
 ]
-
-// Referer 매핑 (핫링크 보호 우회)
-const REFERER_MAP: Record<string, string> = {
-  'daisomall.co.kr': 'https://www.daisomall.co.kr/',
-  'www.daisomall.co.kr': 'https://www.daisomall.co.kr/',
-  'image.daisomall.co.kr': 'https://www.daisomall.co.kr/',
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,19 +34,30 @@ export async function GET(request: NextRequest) {
       return new NextResponse('Domain not allowed', { status: 403 })
     }
 
-    // 이미지 페치 (Referer 헤더 추가)
-    const referer = REFERER_MAP[hostname] || `https://${hostname}/`
-
+    // 이미지 페치 - 브라우저처럼 모든 헤더 설정
     const response = await fetch(imageUrl, {
+      method: 'GET',
       headers: {
-        'Referer': referer,
+        'Host': hostname,
+        'Referer': 'https://www.daisomall.co.kr/',
+        'Origin': 'https://www.daisomall.co.kr',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
       },
+      redirect: 'follow',
     })
 
     if (!response.ok) {
-      console.error(`Proxy fetch failed: ${response.status} for ${imageUrl}`)
+      console.error(`[Proxy] Fetch failed: ${response.status} ${response.statusText} for ${imageUrl}`)
       return new NextResponse('Image not found', { status: 404 })
     }
 
@@ -67,7 +73,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Proxy error:', error)
+    console.error('[Proxy] Error:', error)
     return new NextResponse('Internal server error', { status: 500 })
   }
 }
