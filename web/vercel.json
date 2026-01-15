@@ -4,7 +4,8 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "env": {
-    "NEXT_PUBLIC_USE_S3_API": "false"
+    "NEXT_PUBLIC_USE_S3_API": "false",
+    "CACHE_BUST": "20260115-v2"
   },
   "build": {
     "env": {
