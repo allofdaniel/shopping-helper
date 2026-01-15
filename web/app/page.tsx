@@ -1,5 +1,6 @@
 'use client'
 
+// Build v2.0.1 - Search keywords fix applied
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
