@@ -4,7 +4,7 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
+const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'youtube_products']
 const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating']
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 10000  // 전체 상품 반환 (클라이언트에서 필터링)
@@ -125,6 +125,7 @@ function getStoreName(key: string): string {
     traders: '트레이더스',
     ikea: 'IKEA',
     convenience: '편의점',
+    youtube_products: 'YouTube 추천',
   }
   return names[key] || key
 }
