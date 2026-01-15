@@ -151,7 +151,7 @@ export default function Home() {
         p.official_code?.toLowerCase().includes(query) ||
         p.channel_title?.toLowerCase().includes(query) ||
         p.category?.toLowerCase().includes(query) ||
-        p.keywords?.some(k => k.toLowerCase().includes(query))
+        (Array.isArray(p.keywords) && p.keywords.some(k => k.toLowerCase().includes(query)))
       )
     }
 
