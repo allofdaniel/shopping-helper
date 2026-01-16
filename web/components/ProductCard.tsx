@@ -280,6 +280,28 @@ export const ProductCard = memo(function ProductCard({
             )}
           </div>
 
+          {/* 그룹 2.5: 별점 + 리뷰 + 판매량 */}
+          {(product.rating || product.review_count || product.order_count) && (
+            <div className="flex items-center gap-2 mb-1 text-[10px]">
+              {product.rating && product.rating > 0 && (
+                <span className="flex items-center gap-0.5 text-yellow-500 dark:text-yellow-400 font-medium">
+                  <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                  {product.rating.toFixed(1)}
+                </span>
+              )}
+              {product.review_count && product.review_count > 0 && (
+                <span className="text-gray-500 dark:text-gray-400">
+                  리뷰 {formatViewCount(product.review_count)}
+                </span>
+              )}
+              {product.order_count && product.order_count > 0 && (
+                <span className="text-gray-500 dark:text-gray-400">
+                  판매 {formatViewCount(product.order_count)}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* 그룹 3: 채널 + 조회수 */}
           <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
             <span className="truncate flex-1">{product.channel_title || ''}</span>
@@ -444,6 +466,27 @@ export const ProductCard = memo(function ProductCard({
                     </span>
                   )}
                 </div>
+                {/* 별점 + 리뷰 + 판매량 */}
+                {(product.rating || product.review_count || product.order_count) && (
+                  <div className="flex items-center gap-3 mt-2 text-sm">
+                    {product.rating && product.rating > 0 && (
+                      <span className="flex items-center gap-1 text-yellow-500 dark:text-yellow-400 font-semibold">
+                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                        {product.rating.toFixed(1)}
+                      </span>
+                    )}
+                    {product.review_count && product.review_count > 0 && (
+                      <span className="text-gray-500 dark:text-gray-400">
+                        리뷰 {formatViewCount(product.review_count)}개
+                      </span>
+                    )}
+                    {product.order_count && product.order_count > 0 && (
+                      <span className="text-gray-500 dark:text-gray-400">
+                        판매 {formatViewCount(product.order_count)}개
+                      </span>
+                    )}
+                  </div>
+                )}
                 {product.category && (
                   <span className="inline-block mt-2 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-md text-xs text-gray-600 dark:text-gray-300">
                     📁 {product.category}

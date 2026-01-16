@@ -5,7 +5,7 @@ import path from 'path'
 export const dynamic = 'force-dynamic'
 
 const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'youtube_products']
-const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating']
+const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating', 'sales_count', 'review_count']
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 10000  // 전체 상품 반환 (클라이언트에서 필터링)
 const MAX_SEARCH_LENGTH = 100
@@ -85,6 +85,33 @@ async function loadProductsViaFs(store: string): Promise<any[]> {
   }
 }
 
+// 중복 제거 함수
+function deduplicateProducts(products: any[]): any[] {
+  const seen = new Map<string, any>()
+
+  for (const product of products) {
+    // 고유 키: store_key + (official_code 또는 name)
+    const name = product.official_name || product.name || ''
+    const code = product.official_code || product.product_no || ''
+    const key = `${product.store_key}:${code || name.toLowerCase()}`
+
+    // 이미 존재하면 더 완성도 높은 것 유지
+    if (seen.has(key)) {
+      const existing = seen.get(key)
+      // 이미지가 있는 것, 가격이 있는 것 우선
+      const existingScore = (existing.image_url ? 1 : 0) + (existing.official_price ? 1 : 0) + (existing.rating ? 1 : 0)
+      const newScore = (product.image_url ? 1 : 0) + (product.official_price ? 1 : 0) + (product.rating ? 1 : 0)
+      if (newScore > existingScore) {
+        seen.set(key, product)
+      }
+    } else {
+      seen.set(key, product)
+    }
+  }
+
+  return Array.from(seen.values())
+}
+
 async function loadAllProducts(baseUrl?: string) {
   if (allProductsCache && Date.now() - cacheLoadedAt < CACHE_TTL) {
     return allProductsCache
@@ -105,16 +132,19 @@ async function loadAllProducts(baseUrl?: string) {
     for (const product of products) {
       allProducts.push({
         ...product,
-        store_key: store,
-        store_name: getStoreName(store),
+        store_key: product.store_key || store,
+        store_name: product.store_name || getStoreName(store),
       })
     }
   }
 
-  allProductsCache = allProducts
+  // 중복 제거
+  const deduplicated = deduplicateProducts(allProducts)
+
+  allProductsCache = deduplicated
   cacheLoadedAt = Date.now()
-  console.log(`[API] Loaded ${allProducts.length} products (Vercel: ${isVercel})`)
-  return allProducts
+  console.log(`[API] Loaded ${allProducts.length} products, after dedup: ${deduplicated.length} (Vercel: ${isVercel})`)
+  return deduplicated
 }
 
 function getStoreName(key: string): string {
@@ -153,13 +183,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 검색
+    // 검색 (name, brand, category, keywords, official_name, official_code 포함)
     if (search) {
-      products = products.filter(p =>
-        p.name?.toLowerCase().includes(search) ||
-        p.brand?.toLowerCase().includes(search) ||
-        p.category?.toLowerCase().includes(search)
-      )
+      products = products.filter(p => {
+        if (p.name?.toLowerCase().includes(search)) return true
+        if (p.brand?.toLowerCase().includes(search)) return true
+        if (p.category?.toLowerCase().includes(search)) return true
+        if (p.official_name?.toLowerCase().includes(search)) return true
+        if (p.official_code?.toLowerCase().includes(search)) return true
+        if (p.channel_title?.toLowerCase().includes(search)) return true
+        // keywords 배열 검색
+        if (Array.isArray(p.keywords)) {
+          return p.keywords.some((k: string) => k.toLowerCase().includes(search))
+        }
+        return false
+      })
     }
 
     // 정렬
@@ -178,8 +216,15 @@ export async function GET(request: NextRequest) {
       case 'rating':
         products = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0))
         break
+      case 'sales_count':
+        products = [...products].sort((a, b) => (b.order_count || 0) - (a.order_count || 0))
+        break
+      case 'review_count':
+        products = [...products].sort((a, b) => (b.review_count || 0) - (a.review_count || 0))
+        break
       default:
-        // popular - 기본 순서 유지
+        // popular - 조회수 기준 정렬
+        products = [...products].sort((a, b) => (b.source_view_count || 0) - (a.source_view_count || 0))
         break
     }
 

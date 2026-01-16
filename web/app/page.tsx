@@ -16,6 +16,7 @@ import { AdvancedFilterDrawer } from '@/components/AdvancedFilterDrawer'
 import { ComparePanel, CompareFab } from '@/components/ComparePanel'
 import { ShoppingMode } from '@/components/ShoppingMode'
 import { PullToRefreshIndicator } from '@/components/PullToRefresh'
+import { ToastContainer } from '@/components/Toast'
 
 // Libs & Types
 import { fetchProducts } from '@/lib/api'
@@ -29,6 +30,8 @@ import { useShare } from '@/lib/useShare'
 import { useChecklist } from '@/lib/useChecklist'
 import { useLocale } from '@/lib/i18n'
 import { usePullToRefresh } from '@/lib/usePullToRefresh'
+import { useToastProvider } from '@/lib/useToast'
+import { useRecentSearch } from '@/lib/useRecentSearch'
 
 // Constants
 const CATEGORY_KEYS = ['all', 'kitchen', 'living', 'beauty', 'interior', 'food', 'digital'] as const
@@ -60,6 +63,8 @@ export default function Home() {
   const { wishlistIds, wishlistCount, toggleWishlist, isInWishlist, downloadWishlist } = useWishlist()
   const { checkedIds, toggleCheck } = useChecklist()
   const { shareProduct } = useShare()
+  const { toasts, showToast, removeToast } = useToastProvider()
+  const { recentSearches, addSearch, removeSearch, clearAll: clearRecentSearches } = useRecentSearch()
   const {
     compareIds,
     compareCount,
@@ -167,6 +172,14 @@ export default function Home() {
         const bScore = (b.recommendation_quote ? 1000 : 0) + (b.source_view_count || 0)
         return bScore - aScore
       })
+    } else if (sortBy === 'priceLow') {
+      result.sort((a, b) => (a.price || 0) - (b.price || 0))
+    } else if (sortBy === 'priceHigh') {
+      result.sort((a, b) => (b.price || 0) - (a.price || 0))
+    } else if (sortBy === 'salesCount') {
+      result.sort((a, b) => (b.order_count || 0) - (a.order_count || 0))
+    } else if (sortBy === 'reviewCount') {
+      result.sort((a, b) => (b.review_count || 0) - (a.review_count || 0))
     }
 
     return result
@@ -221,6 +234,10 @@ export default function Home() {
             isFocused={isSearchFocused}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
+            recentSearches={recentSearches}
+            onSelectRecent={addSearch}
+            onRemoveRecent={removeSearch}
+            onClearAllRecent={clearRecentSearches}
           />
 
           <HeaderActions
@@ -395,6 +412,9 @@ export default function Home() {
         onToggleCheck={toggleCheck}
         checkedIds={checkedIds}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Global Styles */}
       <style jsx global>{`
