@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.shopping_helper.twa",
+        "sha256_cert_fingerprints": ["C2:DE:3E:70:C1:45:AA:14:20:4B:DC:C6:BC:19:5B:81:65:48:4B:78:30:FF:06:94:21:8C:1E:18:CB:DD:70:00"]
+      }
+    }]
