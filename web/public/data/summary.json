@@ -1,13 +1,13 @@
 {
-  "updated_at": "2026-01-17T15:50:03.124994",
+  "updated_at": "2026-01-28T08:29:19.163405",
+  "total_products": 1189,
+  "total_videos": 1431,
   "stores": {
-    "daiso": 0,
-    "costco": 0,
-    "ikea": 0,
+    "daiso": 739,
+    "costco": 375,
     "oliveyoung": 0,
     "traders": 0,
+    "ikea": 75,
     "convenience": 0
-  },
-  "total_videos": 948,
-  "total_youtube_products": 0
+  }
 }
