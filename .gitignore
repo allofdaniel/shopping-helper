@@ -61,3 +61,5 @@ android/store_icon.png
 
 # Claude
 .claude/
+
+.vercel

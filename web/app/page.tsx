@@ -1,23 +1,31 @@
 'use client'
 
-// Build v2.1.0 - Stitch-inspired UI redesign
+// Build v2.2.0 - Performance + Security + Accessibility improvements
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import dynamic from 'next/dynamic'
 
-// Components
+// Components - eagerly loaded (above the fold)
 import { type ViewMode } from '@/components/QuickFilters'
 import { ProductGrid } from '@/components/ProductGrid'
 import { WishlistHeader } from '@/components/WishlistHeader'
 import { ScrollTopButton } from '@/components/ScrollTopButton'
 import { AdvancedFilterDrawer } from '@/components/AdvancedFilterDrawer'
 import { ComparePanel, CompareFab } from '@/components/ComparePanel'
-import { ShoppingMode } from '@/components/ShoppingMode'
 import { PullToRefreshIndicator } from '@/components/PullToRefresh'
 import { ToastContainer } from '@/components/Toast'
-import { Onboarding, useOnboarding } from '@/components/Onboarding'
 import { OfflineIndicator } from '@/components/OfflineIndicator'
-import { StoreLocator, useStoreLocator } from '@/components/StoreLocator'
-import { BarcodeScanner, useBarcodeScanner } from '@/components/BarcodeScanner'
+
+// Components - lazy loaded (modals, not needed at initial render)
+const ShoppingMode = dynamic(() => import('@/components/ShoppingMode').then(m => m.ShoppingMode), { ssr: false })
+const Onboarding = dynamic(() => import('@/components/Onboarding').then(m => m.Onboarding), { ssr: false })
+const StoreLocator = dynamic(() => import('@/components/StoreLocator').then(m => m.StoreLocator), { ssr: false })
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner').then(m => m.BarcodeScanner), { ssr: false })
+
+// Hooks from lazy-loaded components (hooks are lightweight, safe to import eagerly)
+import { useOnboarding } from '@/components/Onboarding'
+import { useStoreLocator } from '@/components/StoreLocator'
+import { useBarcodeScanner } from '@/components/BarcodeScanner'
 
 // Libs & Types
 import { fetchProducts } from '@/lib/api'
@@ -43,6 +51,12 @@ const FILTER_ICONS: Record<string, string> = {
   interior: '🪴',
   food: '🍪',
   digital: '📱',
+  fashion: '👕',
+  health: '💊',
+  baby: '👶',
+  pet: '🐕',
+  office: '📝',
+  outdoor: '⛺',
 }
 
 export default function Home() {
@@ -217,7 +231,7 @@ export default function Home() {
       <header className="sticky top-0 z-50 bg-[#F8F9FA]/80 dark:bg-[#121212]/80 backdrop-blur-md px-4 pt-4 pb-2">
         {/* Search Bar - Stitch style */}
         <div className="relative flex items-center mb-4">
-          <span className="absolute left-3 text-slate-400 text-xl">🔍</span>
+          <span className="absolute left-3 text-slate-400 text-xl" aria-hidden="true">🔍</span>
           <input
             type="text"
             value={searchQuery}
@@ -225,13 +239,15 @@ export default function Home() {
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
             placeholder={t('searchPlaceholder')}
+            aria-label={t('searchPlaceholder')}
             className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2.5 pl-10 pr-12 text-sm focus:ring-2 focus:ring-[#FF4E00]/20 focus:outline-none"
           />
           <button
             onClick={() => setIsFilterOpen(true)}
-            className="absolute right-3 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="absolute right-3 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label={`필터 설정${activeFilterCount > 0 ? ` (${activeFilterCount}개 적용됨)` : ''}`}
           >
-            <span className="text-slate-500 text-xl">⚙️</span>
+            <span className="text-slate-500 text-xl" aria-hidden="true">⚙️</span>
             {activeFilterCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF4E00] text-white text-[10px] rounded-full flex items-center justify-center">
                 {activeFilterCount}
@@ -314,30 +330,34 @@ export default function Home() {
       </main>
 
       {/* Stitch-style Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#1E1E1E]/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 py-3 pb-8 flex justify-between items-center z-50">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#1E1E1E]/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 py-3 pb-8 flex justify-between items-center z-50" aria-label="메인 네비게이션">
         <button
           onClick={() => {
             setShowWishlistOnly(false)
             setSelectedCategory('all')
           }}
-          className={`flex flex-col items-center gap-1 transition-colors ${
+          className={`flex flex-col items-center gap-1 transition-colors min-w-[44px] min-h-[44px] justify-center ${
             !showWishlistOnly ? 'text-[#FF4E00]' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
           }`}
+          aria-label="상품 탐색"
+          aria-current={!showWishlistOnly ? 'page' : undefined}
         >
-          <span className="text-xl">🧭</span>
+          <span className="text-xl" aria-hidden="true">🧭</span>
           <span className="text-[10px] font-bold">Discover</span>
         </button>
 
         <button
           onClick={() => setShowWishlistOnly(true)}
-          className={`flex flex-col items-center gap-1 transition-colors ${
+          className={`relative flex flex-col items-center gap-1 transition-colors min-w-[44px] min-h-[44px] justify-center ${
             showWishlistOnly ? 'text-[#FF4E00]' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
           }`}
+          aria-label={`찜한 상품${wishlistCount > 0 ? ` (${wishlistCount}개)` : ''}`}
+          aria-current={showWishlistOnly ? 'page' : undefined}
         >
-          <span className="text-xl">🔖</span>
+          <span className="text-xl" aria-hidden="true">🔖</span>
           <span className="text-[10px] font-medium">Saved</span>
           {wishlistCount > 0 && (
-            <span className="absolute -top-1 ml-4 w-4 h-4 bg-[#FF4E00] text-white text-[9px] rounded-full flex items-center justify-center">
+            <span className="absolute -top-1 ml-4 w-4 h-4 bg-[#FF4E00] text-white text-[9px] rounded-full flex items-center justify-center" aria-hidden="true">
               {wishlistCount}
             </span>
           )}
@@ -347,25 +367,29 @@ export default function Home() {
         <div className="relative -top-4">
           <button
             onClick={() => setShowShoppingMode(true)}
-            className="bg-[#FF4E00] text-white p-4 rounded-full shadow-lg shadow-[#FF4E00]/30 active:scale-95 transition-transform"
+            className="bg-[#FF4E00] text-white p-4 rounded-full shadow-lg shadow-[#FF4E00]/30 active:scale-95 transition-transform min-w-[56px] min-h-[56px] flex items-center justify-center"
+            aria-label="쇼핑 모드 열기"
           >
-            <span className="text-2xl">➕</span>
+            <span className="text-2xl" aria-hidden="true">➕</span>
           </button>
         </div>
 
         <button
           onClick={() => refetch()}
-          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors min-w-[44px] min-h-[44px] justify-center"
+          aria-label={isFetching ? '새로고침 중' : '새로고침'}
+          aria-busy={isFetching}
         >
-          <span className={`text-xl ${isFetching ? 'animate-spin' : ''}`}>🔄</span>
+          <span className={`text-xl ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true">🔄</span>
           <span className="text-[10px] font-medium">Refresh</span>
         </button>
 
         <button
           onClick={toggleTheme}
-          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors min-w-[44px] min-h-[44px] justify-center"
+          aria-label={resolvedTheme === 'dark' ? '라이트 모드 전환' : '다크 모드 전환'}
         >
-          <span className="text-xl">{resolvedTheme === 'dark' ? '🌙' : '☀️'}</span>
+          <span className="text-xl" aria-hidden="true">{resolvedTheme === 'dark' ? '🌙' : '☀️'}</span>
           <span className="text-[10px] font-medium">Theme</span>
         </button>
       </nav>
@@ -426,17 +450,6 @@ export default function Home() {
 
       {/* Onboarding */}
       {showOnboarding && <Onboarding onComplete={completeOnboarding} />}
-
-      {/* Global Styles */}
-      <style jsx global>{`
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in { animation: fade-in 0.3s ease-out; }
-      `}</style>
     </div>
   )
 }

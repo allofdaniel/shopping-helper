@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Package, Heart, Loader2, Play, Eye } from 'lucide-react'
 import { ProductCard } from './ProductCard'
 import type { Product } from '@/lib/types'
@@ -292,7 +293,7 @@ function ProductListItem({
   )
 }
 
-export function ProductGrid({
+export const ProductGrid = memo(function ProductGrid({
   products,
   isLoading,
   isError,
@@ -316,10 +317,22 @@ export function ProductGrid({
   viewMode,
   onSearchSuggestion,
 }: ProductGridProps) {
+  // 무한 스크롤 훅 (Rules of Hooks: 조건부 return 전에 호출)
+  const {
+    displayedItems,
+    hasMore,
+    isLoadingMore,
+    loaderRef,
+  } = useInfiniteScroll({
+    items: products,
+    pageSize: 20,
+    rootMargin: '400px',
+  })
+
   // Stitch-style 로딩 스켈레톤 (3열 기본)
   if (isLoading) {
     return (
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      <div role="status" aria-busy="true" aria-label="Loading products" className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         {[...Array(9)].map((_, i) => (
           <ProductSkeleton key={i} />
         ))}
@@ -353,18 +366,6 @@ export function ProductGrid({
       />
     )
   }
-
-  // 무한 스크롤 훅
-  const {
-    displayedItems,
-    hasMore,
-    isLoadingMore,
-    loaderRef,
-  } = useInfiniteScroll({
-    items: products,
-    pageSize: 20,
-    rootMargin: '400px', // 화면 하단 400px 전에 미리 로딩
-  })
 
   // Stitch-style: 3열 그리드가 기본 (high-density product discovery)
   const gridClass = viewMode === 'large'
@@ -431,4 +432,4 @@ export function ProductGrid({
       )}
     </>
   )
-}
+})

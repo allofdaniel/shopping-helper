@@ -36,6 +36,11 @@ export const ProductCard = memo(function ProductCard({
 }: ProductCardProps) {
   const store = STORES[product.store_key]
   const hasOfficialInfo = product.official_product_url
+
+  // Validate YouTube video_id to prevent XSS (must be exactly 11 alphanumeric/dash/underscore chars)
+  const safeVideoId = product.video_id && /^[a-zA-Z0-9_-]{11}$/.test(product.video_id)
+    ? product.video_id
+    : null
   const [imgError, setImgError] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
@@ -167,10 +172,10 @@ export const ProductCard = memo(function ProductCard({
                 decoding="async"
               />
             </>
-          ) : product.video_id ? (
+          ) : safeVideoId ? (
             <div className="relative w-full h-full">
               <img
-                src={getYoutubeThumbnail(product.video_id)}
+                src={getYoutubeThumbnail(safeVideoId)}
                 alt={product.name}
                 width={480}
                 height={600}
@@ -190,7 +195,7 @@ export const ProductCard = memo(function ProductCard({
           )}
 
           {/* YT Badge - 좌상단 (Stitch style) */}
-          {product.video_id && (
+          {safeVideoId && (
             <div className="absolute top-1.5 left-1.5 bg-red-600 text-[8px] text-white px-1.5 py-0.5 rounded-sm font-bold flex items-center gap-0.5">
               <Play className="w-2.5 h-2.5" fill="white" />
               YT
@@ -198,7 +203,7 @@ export const ProductCard = memo(function ProductCard({
           )}
 
           {/* Store badge - only if no video */}
-          {!product.video_id && (
+          {!safeVideoId && (
             <span
               className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-sm text-white text-[8px] font-bold"
               style={{ backgroundColor: store?.color || '#666' }}
@@ -267,11 +272,8 @@ export const ProductCard = memo(function ProductCard({
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         >
           <div
-            className="bg-white dark:bg-gray-900 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto"
+            className="bg-white dark:bg-gray-900 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto animate-slide-up"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              animation: 'slideUp 0.25s ease-out',
-            }}
           >
             {/* 모달 헤더 - 고정 */}
             <div className="sticky top-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-4 py-3 flex items-center justify-between z-10">
@@ -334,10 +336,10 @@ export const ProductCard = memo(function ProductCard({
 
             {/* 상품 이미지 / 영상 */}
             <div className="relative aspect-video bg-gray-100 dark:bg-gray-800">
-              {showVideo && product.video_id ? (
+              {showVideo && safeVideoId ? (
                 // YouTube 임베드 플레이어
                 <iframe
-                  src={`https://www.youtube.com/embed/${product.video_id}?autoplay=1&start=${product.timestamp_sec || 0}`}
+                  src={`https://www.youtube.com/embed/${safeVideoId}?autoplay=1&start=${product.timestamp_sec || 0}`}
                   title={product.video_title || product.name}
                   className="w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -351,7 +353,7 @@ export const ProductCard = memo(function ProductCard({
                     className="w-full h-full object-contain"
                   />
                   {/* 영상 재생 버튼 오버레이 - video_id 있을 때만 */}
-                  {product.video_id && (
+                  {safeVideoId && (
                     <button
                       onClick={() => setShowVideo(true)}
                       className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg"
@@ -361,13 +363,13 @@ export const ProductCard = memo(function ProductCard({
                     </button>
                   )}
                 </div>
-              ) : product.video_id ? (
+              ) : safeVideoId ? (
                 <div
                   className="relative w-full h-full cursor-pointer"
                   onClick={() => setShowVideo(true)}
                 >
                   <img
-                    src={getYoutubeThumbnail(product.video_id)}
+                    src={getYoutubeThumbnail(safeVideoId)}
                     alt={product.name}
                     className="w-full h-full object-cover"
                   />
@@ -529,7 +531,7 @@ export const ProductCard = memo(function ProductCard({
               )}
 
               {/* 섹션 5: 영상 정보 - video_id가 있을 때만 */}
-              {product.video_id && (
+              {safeVideoId && (
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border dark:border-gray-700">
                   <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-semibold text-sm mb-3">
                     <Youtube className="w-4 h-4 text-red-500" />
@@ -578,7 +580,7 @@ export const ProductCard = memo(function ProductCard({
               {/* Hick's Law: 핵심 액션 2개만 표시 */}
               <div className="flex gap-3 pt-3 sticky bottom-0 bg-white dark:bg-gray-900 pb-2">
                 {/* 영상 재생/멈춤 토글 버튼 - video_id 있을 때만 */}
-                {product.video_id && (
+                {safeVideoId && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -641,19 +643,6 @@ export const ProductCard = memo(function ProductCard({
         </div>
       )}
 
-      {/* CSS 애니메이션 - 글로벌 스타일 */}
-      <style>{`
-        @keyframes slideUp {
-          from {
-            transform: translateY(100%);
-            opacity: 0.5;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </>
   )
 })

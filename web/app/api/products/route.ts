@@ -4,6 +4,30 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
+// Lightweight product type for API route (avoids importing full client types)
+interface ApiProduct {
+  id: number
+  name: string
+  store_key: string
+  store_name: string
+  price: number | null
+  official_price?: number | null
+  official_name?: string | null
+  official_code?: string | null
+  product_no?: string | null
+  category?: string | null
+  brand?: string | null
+  image_url?: string | null
+  keywords?: string[]
+  channel_title?: string | null
+  source_view_count?: number
+  created_at?: string
+  rating?: number | null
+  review_count?: number | null
+  order_count?: number | null
+  [key: string]: unknown // allow additional fields from JSON
+}
+
 const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'youtube_products']
 const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating', 'sales_count', 'review_count']
 const MAX_LIMIT = 10000
@@ -48,12 +72,12 @@ function validateParams(searchParams: URLSearchParams) {
 }
 
 // 전체 상품 캐시
-let allProductsCache: any[] | null = null
+let allProductsCache: ApiProduct[] | null = null
 let cacheLoadedAt = 0
 const CACHE_TTL = 5 * 60 * 1000
 
 // HTTP로 JSON 파일 로드 (Vercel 환경)
-async function loadProductsViaHttp(store: string, baseUrl: string): Promise<any[]> {
+async function loadProductsViaHttp(store: string, baseUrl: string): Promise<ApiProduct[]> {
   try {
     const response = await fetch(`${baseUrl}/data/${store}.json`, {
       cache: 'no-store',
@@ -73,7 +97,7 @@ async function loadProductsViaHttp(store: string, baseUrl: string): Promise<any[
 }
 
 // 파일 시스템으로 JSON 로드 (로컬 환경)
-async function loadProductsViaFs(store: string): Promise<any[]> {
+async function loadProductsViaFs(store: string): Promise<ApiProduct[]> {
   try {
     const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
     const content = await fs.readFile(jsonPath, 'utf-8')
@@ -86,8 +110,8 @@ async function loadProductsViaFs(store: string): Promise<any[]> {
 }
 
 // 중복 제거 함수
-function deduplicateProducts(products: any[]): any[] {
-  const seen = new Map<string, any>()
+function deduplicateProducts(products: ApiProduct[]): ApiProduct[] {
+  const seen = new Map<string, ApiProduct>()
 
   for (const product of products) {
     // 고유 키: store_key + (official_code 또는 name)
@@ -97,7 +121,7 @@ function deduplicateProducts(products: any[]): any[] {
 
     // 이미 존재하면 더 완성도 높은 것 유지
     if (seen.has(key)) {
-      const existing = seen.get(key)
+      const existing = seen.get(key)!
       // 이미지가 있는 것, 가격이 있는 것 우선
       const existingScore = (existing.image_url ? 1 : 0) + (existing.official_price ? 1 : 0) + (existing.rating ? 1 : 0)
       const newScore = (product.image_url ? 1 : 0) + (product.official_price ? 1 : 0) + (product.rating ? 1 : 0)
@@ -121,7 +145,7 @@ async function loadAllProducts(baseUrl?: string) {
   const loadResults = await Promise.all(
     STORES.map(async (store) => {
       try {
-        let products: any[] = []
+        let products: ApiProduct[] = []
         // Vercel 환경에서는 HTTP로, 로컬에서는 파일 시스템으로 로드
         if (isVercel && baseUrl) {
           products = await loadProductsViaHttp(store, baseUrl)
@@ -235,13 +259,20 @@ export async function GET(request: NextRequest) {
     const total = products.length
     const paginated = products.slice(offset, offset + limit)
 
-    return NextResponse.json({
-      products: paginated,
-      total,
-      limit,
-      offset,
-      hasMore: offset + paginated.length < total,
-    })
+    return NextResponse.json(
+      {
+        products: paginated,
+        total,
+        limit,
+        offset,
+        hasMore: offset + paginated.length < total,
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        },
+      }
+    )
 
   } catch (error) {
     console.error('API Error:', error)

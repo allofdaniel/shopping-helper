@@ -136,9 +136,10 @@ export function getYoutubeThumbnail(videoId: string): string {
   return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
 }
 
+const priceFormatter = new Intl.NumberFormat('ko-KR')
 export function formatPrice(price: number | null | undefined): string {
   if (price == null) return '가격 미정'
-  return new Intl.NumberFormat('ko-KR').format(price) + '원'
+  return priceFormatter.format(price) + '원'
 }
 
 export function formatViewCount(count: number): string {

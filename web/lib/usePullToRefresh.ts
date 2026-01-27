@@ -28,6 +28,7 @@ export function usePullToRefresh({
   const containerRef = useRef<HTMLDivElement>(null)
   const startY = useRef(0)
   const currentY = useRef(0)
+  const isPullingRef = useRef(false)
 
   // Use refs to avoid recreating event handlers on every render
   const stateRef = useRef({
@@ -60,13 +61,15 @@ export function usePullToRefresh({
     if (window.scrollY > 0) return // 스크롤이 맨 위가 아니면 무시
 
     startY.current = e.touches[0].clientY
+    isPullingRef.current = true
     setIsPulling(true)
   }, [])
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
     const state = stateRef.current
-    if (!state.isPulling || state.disabled || state.isRefreshing) return
+    if (!isPullingRef.current || state.disabled || state.isRefreshing) return
     if (window.scrollY > 0) {
+      isPullingRef.current = false
       setIsPulling(false)
       setPullDistance(0)
       return

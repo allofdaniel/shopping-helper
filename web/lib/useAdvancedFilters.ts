@@ -34,8 +34,8 @@ export function useAdvancedFilters(products: Product[]) {
       .map((p) => p.official_price || p.price || 0)
       .filter((p) => p > 0)
     return {
-      min: Math.min(...prices, 0),
-      max: Math.max(...prices, 100000),
+      min: prices.length > 0 ? prices.reduce((a, b) => a < b ? a : b, Infinity) : 0,
+      max: prices.length > 0 ? prices.reduce((a, b) => a > b ? a : b, -Infinity) : 100000,
       avg: prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0,
     }
   }, [products])
@@ -44,8 +44,8 @@ export function useAdvancedFilters(products: Product[]) {
   const viewStats = useMemo(() => {
     const views = products.map((p) => p.source_view_count || 0)
     return {
-      min: Math.min(...views, 0),
-      max: Math.max(...views, 10000000),
+      min: views.length > 0 ? views.reduce((a, b) => a < b ? a : b, Infinity) : 0,
+      max: views.length > 0 ? views.reduce((a, b) => a > b ? a : b, -Infinity) : 10000000,
     }
   }, [products])
 

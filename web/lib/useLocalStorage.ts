@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 /**
  * Custom hook for persistent localStorage state with SSR support
@@ -14,8 +14,13 @@ export function useLocalStorage<T>(
     deserialize?: (value: string) => T
   }
 ): [T, (value: T | ((prev: T) => T)) => void, boolean] {
-  const serialize = options?.serialize ?? JSON.stringify
-  const deserialize = options?.deserialize ?? JSON.parse
+  const serializeRef = useRef(options?.serialize ?? JSON.stringify)
+  const deserializeRef = useRef(options?.deserialize ?? JSON.parse)
+
+  useEffect(() => {
+    serializeRef.current = options?.serialize ?? JSON.stringify
+    deserializeRef.current = options?.deserialize ?? JSON.parse
+  }, [options?.serialize, options?.deserialize])
 
   // Initialize with a function to avoid running on every render
   const [storedValue, setStoredValue] = useState<T>(initialValue)
@@ -28,12 +33,11 @@ export function useLocalStorage<T>(
     try {
       const item = localStorage.getItem(key)
       if (item !== null) {
-        const parsed = deserialize(item)
+        const parsed = deserializeRef.current(item)
         setStoredValue(parsed)
       }
     } catch (error) {
       console.warn(`[useLocalStorage] Failed to load "${key}":`, error)
-      // If parsing fails, remove corrupted data
       try {
         localStorage.removeItem(key)
       } catch {
@@ -42,7 +46,7 @@ export function useLocalStorage<T>(
     } finally {
       setIsLoaded(true)
     }
-  }, [key, deserialize])
+  }, [key])
 
   // Save to localStorage whenever value changes (after initial load)
   useEffect(() => {
@@ -50,12 +54,12 @@ export function useLocalStorage<T>(
     if (typeof window === 'undefined') return
 
     try {
-      const serialized = serialize(storedValue)
+      const serialized = serializeRef.current(storedValue)
       localStorage.setItem(key, serialized)
     } catch (error) {
       console.warn(`[useLocalStorage] Failed to save "${key}":`, error)
     }
-  }, [key, storedValue, isLoaded, serialize])
+  }, [key, storedValue, isLoaded])
 
   // Setter function that supports both direct values and updater functions
   const setValue = useCallback((value: T | ((prev: T) => T)) => {

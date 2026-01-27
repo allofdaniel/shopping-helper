@@ -7,12 +7,12 @@ export function middleware(request: NextRequest) {
   // Content Security Policy
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://*.youtube.com",
+    "script-src 'self' 'unsafe-inline' https://www.youtube.com https://*.youtube.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https: http:",
+    "img-src 'self' data: blob: https://*.daisomall.co.kr https://img.youtube.com https://*.ytimg.com https://*.coupang.com https://*.costco.co.kr https://*.ikea.com https://*.oliveyoung.co.kr",
     "font-src 'self'",
     "frame-src https://www.youtube.com https://*.youtube.com",
-    "connect-src 'self' https:",
+    "connect-src 'self' https://www.youtube.com https://*.youtube.com https://*.daisomall.co.kr",
     "media-src 'self' https:",
     "object-src 'none'",
     "base-uri 'self'",
@@ -24,9 +24,10 @@ export function middleware(request: NextRequest) {
   // Additional security headers
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'SAMEORIGIN')
-  response.headers.set('X-XSS-Protection', '1; mode=block')
+  response.headers.set('X-XSS-Protection', '0')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self)')
+  response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
 
   return response
 }
