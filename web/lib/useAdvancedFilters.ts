@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import type { Product } from './types'
+import { matchesCategory, type CategoryKey } from './categoryUtils'
 
 export interface FilterState {
   priceRange: [number, number]
@@ -116,18 +117,11 @@ export function useAdvancedFilters(products: Product[]) {
         return false
       }
 
-      // 카테고리 필터 (키워드 매칭)
+      // 카테고리 필터 (using centralized category matching)
       if (filters.categories.length > 0) {
-        const cat = product.category?.toLowerCase() || ''
-        const matched = filters.categories.some((filterCat) => {
-          if (filterCat === 'food') return cat.includes('식품') || cat.includes('간식') || cat.includes('음료')
-          if (filterCat === 'beauty') return cat.includes('뷰티') || cat.includes('화장') || cat.includes('미용')
-          if (filterCat === 'living') return cat.includes('생활') || cat.includes('청소') || cat.includes('세탁')
-          if (filterCat === 'kitchen') return cat.includes('주방') || cat.includes('밀폐') || cat.includes('유리') || cat.includes('실리콘')
-          if (filterCat === 'interior') return cat.includes('인테리어') || cat.includes('수납') || cat.includes('조명')
-          if (filterCat === 'digital') return cat.includes('디지털') || cat.includes('케이블') || cat.includes('전자')
-          return false
-        })
+        const matched = filters.categories.some((filterCat) =>
+          matchesCategory(product.category, filterCat as CategoryKey)
+        )
         if (!matched) return false
       }
 

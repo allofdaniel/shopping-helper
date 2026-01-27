@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   ShoppingCart, Check, Copy, ExternalLink, ChevronDown, ChevronUp,
   MapPin, Search, X, CheckCircle2, Circle, Store, Tag, Clock
 } from 'lucide-react'
-import type { Product } from '@/lib/types'
+import type { Product, StoreKey } from '@/lib/types'
 import { STORES } from '@/lib/types'
 import { formatPrice } from '@/lib/api'
 import { useTranslation } from '@/lib/i18n'
@@ -19,7 +19,7 @@ interface ShoppingModeProps {
   checkedIds: number[]
 }
 
-// 매장별 검색 URL 생성
+// 매장별 검색 URL 생성 (레거시 스토어 키 포함)
 const getStoreSearchUrl = (storeKey: string, query: string): string | null => {
   const encodedQuery = encodeURIComponent(query)
 
@@ -63,7 +63,7 @@ export function ShoppingMode({
   // 찜한 상품만 필터링 후 매장별 그룹화
   const groupedByStore = useMemo(() => {
     const wishlistProducts = products.filter(p => wishlistIds.includes(p.id))
-    const groups: Record<string, Product[]> = {}
+    const groups: Partial<Record<StoreKey, Product[]>> = {}
 
     wishlistProducts.forEach(p => {
       const key = p.store_key
@@ -72,8 +72,8 @@ export function ShoppingMode({
     })
 
     // 매장별 정렬
-    const order = ['daiso', 'costco', 'ikea', 'oliveyoung', 'cu', 'gs25', 'seveneleven', 'emart24', 'convenience', 'artbox']
-    const sorted = Object.entries(groups).sort(([a], [b]) => {
+    const order: StoreKey[] = ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'convenience', 'youtube_products']
+    const sorted = (Object.entries(groups) as [StoreKey, Product[]][]).sort(([a], [b]) => {
       return order.indexOf(a) - order.indexOf(b)
     })
 
@@ -115,26 +115,69 @@ export function ShoppingMode({
         p.official_name?.toLowerCase().includes(query) ||
         p.official_code?.toLowerCase().includes(query)
       )
-      return [storeKey, filtered] as [string, Product[]]
+      return [storeKey, filtered] as [StoreKey, Product[]]
     }).filter(([, items]) => items.length > 0)
   }, [groupedByStore, searchInStore])
+
+  const modalRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  // 모달 접근성: ESC 키로 닫기 + focus trap
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+      // Focus trap
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        const firstElement = focusableElements[0] as HTMLElement
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault()
+          lastElement?.focus()
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault()
+          firstElement?.focus()
+        }
+      }
+    }
+
+    // 모달 열릴 때 포커스 이동
+    closeButtonRef.current?.focus()
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center">
+    <div
+      className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shopping-mode-title"
+      onClick={onClose}
+    >
       <div
-        className="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[95vh] flex flex-col"
+        ref={modalRef}
+        className="bg-white dark:bg-gray-900 w-full sm:max-w-md md:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[95vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-3 py-2.5 flex items-center justify-between z-10 rounded-t-2xl">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-red-500 rounded-xl flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-white" />
+              <ShoppingCart className="w-4 h-4 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-bold text-sm text-gray-900 dark:text-white">
+              <h2 id="shopping-mode-title" className="font-bold text-sm text-gray-900 dark:text-white">
                 {t('shoppingChecklist')}
               </h2>
               <p className="text-[10px] text-gray-500 dark:text-gray-400">
@@ -143,10 +186,12 @@ export function ShoppingMode({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
+            className="min-w-[44px] min-h-[44px] p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-orange-400"
+            aria-label="쇼핑 체크리스트 닫기"
           >
-            <X className="w-4 h-4 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" aria-hidden="true" />
           </button>
         </div>
 

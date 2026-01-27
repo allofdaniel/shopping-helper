@@ -2,6 +2,7 @@
   "name": "꿀템장바구니",
   "short_name": "꿀템",
   "description": "유튜버 추천 오프라인 매장 꿀템 모음",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -14,65 +15,98 @@
       "src": "/icon-72.png",
       "sizes": "72x72",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-96.png",
       "sizes": "96x96",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-128.png",
       "sizes": "128x128",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-144.png",
       "sizes": "144x144",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-152.png",
       "sizes": "152x152",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-384.png",
       "sizes": "384x384",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [
     {
-      "src": "/screenshots/home.png",
+      "src": "/screenshot-main.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "홈 화면"
     },
     {
-      "src": "/screenshots/shopping.png",
+      "src": "/screenshot-light.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "쇼핑 모드"
+      "label": "라이트 모드"
+    },
+    {
+      "src": "/screenshot-category.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "카테고리 필터"
+    },
+    {
+      "src": "/screenshot-tablet-7.png",
+      "sizes": "1200x1920",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "태블릿 7인치"
+    },
+    {
+      "src": "/screenshot-tablet-10.png",
+      "sizes": "1920x1200",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "태블릿 10인치"
     }
   ],
   "categories": ["shopping", "lifestyle"],

@@ -28,9 +28,12 @@ export async function GET(request: NextRequest) {
       return new NextResponse('Invalid URL', { status: 400 })
     }
 
-    // 도메인 검증
-    const hostname = parsedUrl.hostname
-    if (!ALLOWED_DOMAINS.some(domain => hostname.includes(domain))) {
+    // 도메인 검증 (SSRF 방지 - 정확한 매칭)
+    const hostname = parsedUrl.hostname.toLowerCase()
+    const isAllowedDomain = ALLOWED_DOMAINS.some(domain =>
+      hostname === domain || hostname.endsWith('.' + domain)
+    )
+    if (!isAllowedDomain) {
       return new NextResponse('Domain not allowed', { status: 403 })
     }
 
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=86400, s-maxage=604800', // 1일 브라우저, 7일 CDN 캐시
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': 'https://web-keprojects.vercel.app',
       },
     })
   } catch (error) {

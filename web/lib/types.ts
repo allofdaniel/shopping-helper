@@ -15,7 +15,7 @@ export interface Product {
   timestamp_text: string | null
   recommendation_quote: string | null  // 추천 이유 스크립트
   keywords: string[]
-  store_key: string
+  store_key: StoreKey
   store_name: string
   official_code: string | null
   official_name: string | null
@@ -39,6 +39,10 @@ export interface Product {
   store_locations?: StoreLocation[] | string | null
   product_code_display?: string | null
   availability_note?: string | null
+  // 리뷰/판매 정보 (다이소 등 크롤링 데이터)
+  rating?: number | null
+  review_count?: number | null
+  order_count?: number | null
 }
 
 export interface Video {
@@ -52,12 +56,12 @@ export interface Video {
   thumbnail_url: string
   view_count: number
   like_count: number
-  store_key: string
+  store_key: StoreKey
   store_name: string
 }
 
 export interface Store {
-  key: string
+  key: StoreKey
   name: string
   icon: string
   color: string
@@ -83,7 +87,16 @@ export interface Stats {
 // 매장 표시 순서 (중요도 순) - 실제 데이터 파일과 일치
 const STORE_ORDER = ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'convenience', 'youtube_products'] as const
 
-export const STORES: Record<string, Store> = {
+// 타입 안전한 StoreKey 타입
+export type StoreKey = typeof STORE_ORDER[number]
+
+// 필터용 StoreKey (all 포함)
+export type StoreFilter = 'all' | StoreKey
+
+// 정렬 옵션 타입
+export type SortOption = 'popular' | 'new' | 'recommended' | 'priceLow' | 'priceHigh' | 'salesCount' | 'reviewCount'
+
+export const STORES: Record<StoreKey, Store> = {
   daiso: { key: 'daiso', name: '다이소', icon: '🏪', color: '#FF6B35', count: 0 },
   costco: { key: 'costco', name: '코스트코', icon: '🛒', color: '#E31837', count: 0 },
   ikea: { key: 'ikea', name: '이케아', icon: '🪑', color: '#0051BA', count: 0 },

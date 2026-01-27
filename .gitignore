@@ -44,3 +44,20 @@ null_price_products.txt
 tools/
 crawler/improved_products.json
 *.tar
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/signing.keystore
+android/signing-key-info.txt
+android/app-release*
+android/app-release*.idsig
+android/store_icon.png
+
+# Stitch
+.stitch-project.json
+
+# Claude
+.claude/

@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  ShoppingCart, SlidersHorizontal, Globe, Sun, Moon, RefreshCw
+  ShoppingCart, SlidersHorizontal, Globe, Sun, Moon, RefreshCw, MapPin, ScanBarcode
 } from 'lucide-react'
 import { useState } from 'react'
 import type { TranslationKey } from '@/lib/i18n'
@@ -14,6 +14,12 @@ interface HeaderActionsProps {
   // 필터
   activeFilterCount: number
   onOpenFilter: () => void
+
+  // 매장 찾기
+  onOpenStoreLocator: () => void
+
+  // 바코드 스캔
+  onOpenBarcodeScanner: () => void
 
   // 언어
   locale: string
@@ -37,6 +43,8 @@ export function HeaderActions({
   onOpenShoppingMode,
   activeFilterCount,
   onOpenFilter,
+  onOpenStoreLocator,
+  onOpenBarcodeScanner,
   locale,
   setLocale,
   localeNames,
@@ -54,12 +62,13 @@ export function HeaderActions({
       {wishlistCount > 0 && (
         <button
           onClick={onOpenShoppingMode}
-          className="p-1.5 rounded-lg bg-gradient-to-r from-orange-400 to-red-500 text-white transition-all relative mr-0.5"
-          title={t('shopping')}
+          className="min-w-[44px] min-h-[44px] p-2.5 rounded-lg bg-gradient-to-r from-orange-400 to-red-500 text-white transition-all relative mr-0.5 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
+          aria-label={`${t('shopping')} (${wishlistCount}개 상품)`}
         >
-          <ShoppingCart className="w-3.5 h-3.5" />
-          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-white text-orange-500 text-[8px]
-                         rounded-full flex items-center justify-center font-bold shadow-sm">
+          <ShoppingCart className="w-5 h-5" aria-hidden="true" />
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-orange-500 text-[10px]
+                         rounded-full flex items-center justify-center font-bold shadow-sm"
+                aria-hidden="true">
             {wishlistCount}
           </span>
         </button>
@@ -68,30 +77,51 @@ export function HeaderActions({
       {/* 고급 필터 버튼 */}
       <button
         onClick={onOpenFilter}
-        className={`p-1.5 rounded-lg transition-colors relative
+        className={`min-w-[44px] min-h-[44px] p-2.5 rounded-lg transition-colors relative flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
                    ${activeFilterCount > 0
                      ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500'
                      : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
                    }`}
-        title={t('advancedFilters')}
+        aria-label={activeFilterCount > 0 ? `${t('advancedFilters')} (${activeFilterCount}개 적용됨)` : t('advancedFilters')}
       >
-        <SlidersHorizontal className="w-3.5 h-3.5" />
+        <SlidersHorizontal className="w-5 h-5" aria-hidden="true" />
         {activeFilterCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-500 text-white text-[8px]
-                         rounded-full flex items-center justify-center font-bold">
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-[10px]
+                         rounded-full flex items-center justify-center font-bold"
+                aria-hidden="true">
             {activeFilterCount}
           </span>
         )}
+      </button>
+
+      {/* 매장 찾기 버튼 */}
+      <button
+        onClick={onOpenStoreLocator}
+        className="min-w-[44px] min-h-[44px] p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-green-500 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+        aria-label="주변 매장 찾기"
+      >
+        <MapPin className="w-5 h-5" aria-hidden="true" />
+      </button>
+
+      {/* 바코드 스캔 버튼 */}
+      <button
+        onClick={onOpenBarcodeScanner}
+        className="min-w-[44px] min-h-[44px] p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-purple-500 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2"
+        aria-label="바코드 스캔"
+      >
+        <ScanBarcode className="w-5 h-5" aria-hidden="true" />
       </button>
 
       {/* 언어 선택 */}
       <div className="relative">
         <button
           onClick={() => setShowLangMenu(!showLangMenu)}
-          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          title={t('language')}
+          className="min-w-[44px] min-h-[44px] p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+          aria-label={`${t('language')} (${localeNames[locale]})`}
+          aria-expanded={showLangMenu}
+          aria-haspopup="menu"
         >
-          <Globe className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+          <Globe className="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true" />
         </button>
         {showLangMenu && (
           <div className="absolute right-0 top-full mt-0.5 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 py-0.5 min-w-[90px] z-50">
@@ -115,13 +145,14 @@ export function HeaderActions({
       {/* 다크모드 토글 */}
       <button
         onClick={toggleTheme}
-        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        title={resolvedTheme === 'dark' ? t('lightMode') : t('darkMode')}
+        className="min-w-[44px] min-h-[44px] p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+        aria-label={resolvedTheme === 'dark' ? t('lightMode') : t('darkMode')}
+        aria-pressed={resolvedTheme === 'dark'}
       >
         {resolvedTheme === 'dark' ? (
-          <Sun className="w-3.5 h-3.5 text-yellow-400" />
+          <Sun className="w-5 h-5 text-yellow-400" aria-hidden="true" />
         ) : (
-          <Moon className="w-3.5 h-3.5 text-gray-500" />
+          <Moon className="w-5 h-5 text-gray-500" aria-hidden="true" />
         )}
       </button>
 
@@ -129,10 +160,11 @@ export function HeaderActions({
       <button
         onClick={onRefetch}
         disabled={isFetching}
-        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        title={t('refresh')}
+        className="min-w-[44px] min-h-[44px] p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+        aria-label={isFetching ? '새로고침 중...' : t('refresh')}
+        aria-busy={isFetching}
       >
-        <RefreshCw className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 ${isFetching ? 'animate-spin' : ''}`} />
+        <RefreshCw className={`w-5 h-5 text-gray-500 dark:text-gray-400 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
       </button>
     </div>
   )

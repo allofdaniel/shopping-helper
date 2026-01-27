@@ -1,6 +1,6 @@
 'use client'
 
-import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2, ImageOff } from 'lucide-react'
+import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2, Plus } from 'lucide-react'
 import type { Product, StoreLocation } from '@/lib/types'
 import { STORES } from '@/lib/types'
 import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl } from '@/lib/api'
@@ -16,11 +16,11 @@ interface ProductCardProps {
   maxCompare?: number
   onShare?: () => void
   compact?: boolean  // 작은 아이콘 뷰
+  onAddToCart?: (productId: number) => void
 }
 
-// UX Law: Fitts's Law - 중요한 버튼은 크고 가까워야 함
-// UX Law: Miller's Law - 정보를 5~7개 그룹으로 청킹
-// UX Law: Doherty Threshold - 400ms 이내 반응
+// Stitch-inspired modern card design
+// Primary color: #FF4E00
 
 export const ProductCard = memo(function ProductCard({
   product,
@@ -32,6 +32,7 @@ export const ProductCard = memo(function ProductCard({
   maxCompare = 4,
   onShare,
   compact = false,
+  onAddToCart,
 }: ProductCardProps) {
   const store = STORES[product.store_key]
   const hasOfficialInfo = product.official_product_url
@@ -136,32 +137,28 @@ export const ProductCard = memo(function ProductCard({
 
   return (
     <>
-      {/* 카드 - 터치 영역 44x44 이상 (Fitts's Law) */}
+      {/* Stitch-inspired Modern Card */}
       <article
         onClick={handleCardClick}
         onKeyDown={(e) => e.key === 'Enter' && handleCardClick()}
         role="button"
         tabIndex={0}
         aria-label={`${product.name}, ${store?.name}, ${formatPrice(product.official_price || product.price)}`}
-        className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden cursor-pointer
-                   active:scale-[0.98] transition-transform duration-100
-                   hover:shadow-md dark:shadow-gray-900/50
-                   border border-transparent dark:border-gray-700
-                   focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2
-                   ${compact ? 'min-h-[140px]' : 'min-h-[180px]'}`}
+        className="group flex flex-col gap-1.5"
       >
-        {/* 이미지 영역 */}
-        <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-700 overflow-hidden">
+        {/* 이미지 영역 - aspect-[4/5] for high-density grid */}
+        <div className="relative aspect-[4/5] bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800">
           {imageUrl ? (
             <>
-              {/* 이미지 로딩 중 스켈레톤 */}
               {!imgLoaded && (
-                <div className="absolute inset-0 bg-gray-200 dark:bg-gray-600 animate-pulse" />
+                <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
               )}
               <img
                 src={imageUrl}
                 alt={product.name}
-                className={`w-full h-full object-contain p-1 transition-opacity duration-300 ${
+                width={300}
+                height={375}
+                className={`w-full h-full object-cover transition-opacity duration-300 ${
                   imgLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
                 onError={() => setImgError(true)}
@@ -175,143 +172,87 @@ export const ProductCard = memo(function ProductCard({
               <img
                 src={getYoutubeThumbnail(product.video_id)}
                 alt={product.name}
+                width={480}
+                height={600}
                 className="w-full h-full object-cover"
                 loading="lazy"
                 decoding="async"
               />
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <Play className="w-8 h-8 text-white" fill="white" />
+              {/* Video play overlay */}
+              <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                <Play className="w-8 h-8 text-white opacity-80" fill="white" />
               </div>
             </div>
           ) : (
-            // 이미지 없는 카탈로그 상품용 플레이스홀더
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800">
-              <Package className="w-12 h-12 text-gray-300 dark:text-gray-500" />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+              <Package className="w-10 h-10 text-gray-300 dark:text-gray-600" />
             </div>
           )}
 
-          {/* 스토어 배지 - 좌상단 (Jakob's Law - 표준 위치) */}
-          <span
-            className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-white text-[10px] font-bold shadow-sm"
-            style={{ backgroundColor: store?.color || '#666' }}
+          {/* YT Badge - 좌상단 (Stitch style) */}
+          {product.video_id && (
+            <div className="absolute top-1.5 left-1.5 bg-red-600 text-[8px] text-white px-1.5 py-0.5 rounded-sm font-bold flex items-center gap-0.5">
+              <Play className="w-2.5 h-2.5" fill="white" />
+              YT
+            </div>
+          )}
+
+          {/* Store badge - only if no video */}
+          {!product.video_id && (
+            <span
+              className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-sm text-white text-[8px] font-bold"
+              style={{ backgroundColor: store?.color || '#666' }}
+            >
+              {store?.icon}
+            </span>
+          )}
+
+          {/* 찜하기 버튼 - 우상단 (Stitch style) */}
+          {onToggleWishlist && (
+            <button
+              onClick={handleWishlistToggle}
+              className="absolute top-1.5 right-1.5 p-1"
+              aria-label={isInWishlist ? '찜 해제' : '찜하기'}
+            >
+              <Heart
+                className={`w-[18px] h-[18px] drop-shadow-md transition-colors ${
+                  isInWishlist ? 'text-[#FF4E00] fill-[#FF4E00]' : 'text-white'
+                }`}
+                fill={isInWishlist ? '#FF4E00' : 'none'}
+                strokeWidth={2}
+              />
+            </button>
+          )}
+
+          {/* 장바구니 추가 버튼 - 우하단 (Stitch style) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (onToggleWishlist) onToggleWishlist(product.id)
+            }}
+            className="absolute bottom-1.5 right-1.5 bg-white/90 dark:bg-black/60 backdrop-blur p-1.5 rounded-lg shadow-sm hover:bg-white dark:hover:bg-black/80 transition-colors"
+            aria-label="장바구니 담기"
           >
-            {store?.icon} {store?.name}
-          </span>
+            <Plus className="w-4 h-4 text-[#FF4E00]" strokeWidth={2.5} />
+          </button>
 
-          {/* 우상단 액션 버튼들 */}
-          <div className="absolute top-1.5 right-1.5 flex flex-col gap-1">
-            {/* 찜하기 버튼 */}
-            {onToggleWishlist && (
-              <button
-                onClick={handleWishlistToggle}
-                className={`p-1.5 rounded-full shadow-md transition-all
-                           ${isInWishlist
-                             ? 'bg-red-500 text-white'
-                             : 'bg-white/90 dark:bg-gray-800/90 text-gray-400 hover:text-red-500'}`}
-                aria-label={isInWishlist ? '찜 해제' : '찜하기'}
-              >
-                <Heart
-                  className="w-4 h-4"
-                  fill={isInWishlist ? 'white' : 'none'}
-                />
-              </button>
-            )}
-
-            {/* 비교 버튼 */}
-            {onToggleCompare && (
-              <button
-                onClick={handleCompareToggle}
-                disabled={!isInCompare && compareCount >= maxCompare}
-                className={`p-1.5 rounded-full shadow-md transition-all
-                           ${isInCompare
-                             ? 'bg-orange-500 text-white'
-                             : compareCount >= maxCompare
-                               ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                               : 'bg-white/90 dark:bg-gray-800/90 text-gray-400 hover:text-orange-500'}`}
-                aria-label={isInCompare ? '비교 해제' : '비교하기'}
-                title={compareCount >= maxCompare && !isInCompare ? `최대 ${maxCompare}개까지 비교 가능` : ''}
-              >
-                <Scale className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* 타임스탬프 배지 */}
+          {/* 타임스탬프 - 좌하단 */}
           {timestampDisplay && (
-            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/70 rounded text-white text-[10px] flex items-center gap-0.5">
+            <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 bg-black/70 rounded text-white text-[9px] flex items-center gap-0.5">
               <Clock className="w-2.5 h-2.5" />
               {timestampDisplay}
             </span>
           )}
-
-          {/* 추천 이유 표시 - 있을 때만 */}
-          {product.recommendation_quote && (
-            <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 bg-yellow-400 rounded text-[9px] font-medium flex items-center gap-0.5">
-              <MessageCircle className="w-2.5 h-2.5" />
-              추천
-            </div>
-          )}
         </div>
 
-        {/* 정보 영역 - Miller's Law: 청킹 적용 */}
-        <div className="p-2">
-          {/* 그룹 1: 상품명 */}
-          <h3 className="font-medium text-xs leading-tight line-clamp-2 mb-1 min-h-[28px]
-                         text-gray-900 dark:text-gray-100">
+        {/* 정보 영역 - Stitch style compact info */}
+        <div className="px-0.5">
+          <p className="text-[12px] font-medium line-clamp-2 leading-tight dark:text-slate-200 text-slate-800">
             {product.official_name || product.name}
-          </h3>
-
-          {/* 그룹 2: 가격 + 품번 */}
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-bold text-red-500 dark:text-red-400">
-              {formatPrice(product.official_price || product.price)}
-            </p>
-            {product.official_code && (
-              <button
-                onClick={handleCopyCode}
-                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] transition-all
-                          ${copiedCode
-                            ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400'
-                            : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}
-              >
-                <Tag className="w-2.5 h-2.5" />
-                {copiedCode ? '복사!' : product.official_code.slice(0, 8)}
-              </button>
-            )}
-          </div>
-
-          {/* 그룹 2.5: 별점 + 리뷰 + 판매량 */}
-          {(product.rating || product.review_count || product.order_count) && (
-            <div className="flex items-center gap-2 mb-1 text-[10px]">
-              {product.rating && product.rating > 0 && (
-                <span className="flex items-center gap-0.5 text-yellow-500 dark:text-yellow-400 font-medium">
-                  <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-                  {product.rating.toFixed(1)}
-                </span>
-              )}
-              {product.review_count && product.review_count > 0 && (
-                <span className="text-gray-500 dark:text-gray-400">
-                  리뷰 {formatViewCount(product.review_count)}
-                </span>
-              )}
-              {product.order_count && product.order_count > 0 && (
-                <span className="text-gray-500 dark:text-gray-400">
-                  판매 {formatViewCount(product.order_count)}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* 그룹 3: 채널 + 조회수 */}
-          <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
-            <span className="truncate flex-1">{product.channel_title || ''}</span>
-            {product.source_view_count > 0 && (
-              <span className="flex items-center gap-0.5 ml-1">
-                <Eye className="w-2.5 h-2.5" />
-                {formatViewCount(product.source_view_count)}
-              </span>
-            )}
-          </div>
+          </p>
+          <p className="text-[13px] font-bold text-[#FF4E00] mt-0.5">
+            {formatPrice(product.official_price || product.price)}
+          </p>
         </div>
       </article>
 

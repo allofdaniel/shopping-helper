@@ -25,16 +25,19 @@ const TOAST_STYLES: Record<ToastVariant, string> = {
 function Toast({ toast, onRemove }: ToastProps) {
   return (
     <div
+      role="alert"
+      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-lg backdrop-blur-sm
                   animate-slide-up ${TOAST_STYLES[toast.type]}`}
     >
-      {TOAST_ICONS[toast.type]}
+      <span aria-hidden="true">{TOAST_ICONS[toast.type]}</span>
       <span className="text-sm text-gray-700 dark:text-gray-200 flex-1">{toast.message}</span>
       <button
         onClick={() => onRemove(toast.id)}
         className="p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+        aria-label="알림 닫기"
       >
-        <X className="w-3.5 h-3.5 text-gray-500" />
+        <X className="w-3.5 h-3.5 text-gray-500" aria-hidden="true" />
       </button>
     </div>
   )

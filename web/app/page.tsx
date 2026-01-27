@@ -1,15 +1,12 @@
 'use client'
 
-// Build v2.0.1 - Search keywords fix applied
+// Build v2.1.0 - Stitch-inspired UI redesign
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 // Components
-import { SearchBar } from '@/components/SearchBar'
-import { HeaderActions } from '@/components/HeaderActions'
-import { QuickFilters, type ViewMode } from '@/components/QuickFilters'
+import { type ViewMode } from '@/components/QuickFilters'
 import { ProductGrid } from '@/components/ProductGrid'
-import { ResultsSummary } from '@/components/ResultsSummary'
 import { WishlistHeader } from '@/components/WishlistHeader'
 import { ScrollTopButton } from '@/components/ScrollTopButton'
 import { AdvancedFilterDrawer } from '@/components/AdvancedFilterDrawer'
@@ -17,47 +14,51 @@ import { ComparePanel, CompareFab } from '@/components/ComparePanel'
 import { ShoppingMode } from '@/components/ShoppingMode'
 import { PullToRefreshIndicator } from '@/components/PullToRefresh'
 import { ToastContainer } from '@/components/Toast'
+import { Onboarding, useOnboarding } from '@/components/Onboarding'
+import { OfflineIndicator } from '@/components/OfflineIndicator'
+import { StoreLocator, useStoreLocator } from '@/components/StoreLocator'
+import { BarcodeScanner, useBarcodeScanner } from '@/components/BarcodeScanner'
 
 // Libs & Types
 import { fetchProducts } from '@/lib/api'
-import type { Product } from '@/lib/types'
-import { STORES } from '@/lib/types'
+import type { Product, SortOption, StoreFilter } from '@/lib/types'
 import { useWishlist } from '@/lib/useWishlist'
 import { useAdvancedFilters } from '@/lib/useAdvancedFilters'
 import { useCompare } from '@/lib/useCompare'
 import { useTheme } from '@/lib/useTheme'
 import { useShare } from '@/lib/useShare'
 import { useChecklist } from '@/lib/useChecklist'
-import { useLocale } from '@/lib/i18n'
+import { useLocale, type TranslationKey } from '@/lib/i18n'
 import { usePullToRefresh } from '@/lib/usePullToRefresh'
 import { useToastProvider } from '@/lib/useToast'
 import { useRecentSearch } from '@/lib/useRecentSearch'
-
-// Constants
-const CATEGORY_KEYS = ['all', 'kitchen', 'living', 'beauty', 'interior', 'food', 'digital'] as const
+import { useDebounce } from '@/lib/useDebounce'
+import { matchesCategory, CATEGORY_KEYS, type CategoryKey } from '@/lib/categoryUtils'
 
 const FILTER_ICONS: Record<string, string> = {
-  all: '',
-  kitchen: '',
-  living: '',
-  beauty: '',
-  interior: '',
-  food: '',
-  digital: '',
+  all: '🏠',
+  kitchen: '🍳',
+  living: '🧹',
+  beauty: '💄',
+  interior: '🪴',
+  food: '🍪',
+  digital: '📱',
 }
 
 export default function Home() {
   // UI State
-  const [selectedStore, setSelectedStore] = useState('all')
+  const [selectedStore, setSelectedStore] = useState<StoreFilter>('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
-  const [sortBy, setSortBy] = useState('popular')
+  const [sortBy, setSortBy] = useState<SortOption>('popular')
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearchQuery = useDebounce(searchQuery, 300) // Debounce search for better performance
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [showWishlistOnly, setShowWishlistOnly] = useState(false)
   const [showShoppingMode, setShowShoppingMode] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('large')
 
   // Hooks
+  const { showOnboarding, completeOnboarding } = useOnboarding()
   const { resolvedTheme, toggleTheme, mounted } = useTheme()
   const { locale, setLocale, t, localeNames } = useLocale()
   const { wishlistIds, wishlistCount, toggleWishlist, isInWishlist, downloadWishlist } = useWishlist()
@@ -65,6 +66,8 @@ export default function Home() {
   const { shareProduct } = useShare()
   const { toasts, showToast, removeToast } = useToastProvider()
   const { recentSearches, addSearch, removeSearch, clearAll: clearRecentSearches } = useRecentSearch()
+  const { isOpen: isStoreLocatorOpen, filterStore, openLocator: openStoreLocator, closeLocator: closeStoreLocator } = useStoreLocator()
+  const { isOpen: isScannerOpen, openScanner, closeScanner } = useBarcodeScanner()
   const {
     compareIds,
     compareCount,
@@ -80,10 +83,6 @@ export default function Home() {
   const { data: products = [], isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['products'],
     queryFn: () => fetchProducts(),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 
   // Pull-to-Refresh (모바일)
@@ -134,23 +133,16 @@ export default function Home() {
       result = result.filter((p: Product) => p.store_key === selectedStore)
     }
 
-    // Category filter
+    // Category filter (using centralized category matching)
     if (selectedCategory !== 'all') {
-      result = result.filter((p: Product) => {
-        const cat = p.category?.toLowerCase() || ''
-        if (selectedCategory === 'food') return cat.includes('식품') || cat.includes('간식') || cat.includes('음료')
-        if (selectedCategory === 'beauty') return cat.includes('뷰티') || cat.includes('화장') || cat.includes('미용')
-        if (selectedCategory === 'living') return cat.includes('생활') || cat.includes('청소') || cat.includes('세탁')
-        if (selectedCategory === 'kitchen') return cat.includes('주방') || cat.includes('밀폐') || cat.includes('유리') || cat.includes('실리콘')
-        if (selectedCategory === 'interior') return cat.includes('인테리어') || cat.includes('수납') || cat.includes('조명')
-        if (selectedCategory === 'digital') return cat.includes('디지털') || cat.includes('케이블') || cat.includes('전자')
-        return true
-      })
+      result = result.filter((p: Product) =>
+        matchesCategory(p.category, selectedCategory as CategoryKey)
+      )
     }
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase().trim()
+    // Search filter (uses debounced query for better performance)
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase().trim().slice(0, 100) // Limit length
       result = result.filter((p: Product) =>
         p.name.toLowerCase().includes(query) ||
         p.official_name?.toLowerCase().includes(query) ||
@@ -183,7 +175,7 @@ export default function Home() {
     }
 
     return result
-  }, [products, selectedStore, selectedCategory, searchQuery, sortBy, showWishlistOnly, wishlistIds, applyFilters])
+  }, [products, selectedStore, selectedCategory, debouncedSearchQuery, sortBy, showWishlistOnly, wishlistIds, applyFilters])
 
   // Store counts
   const storeCounts = useMemo(() => {
@@ -211,131 +203,74 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 transition-colors duration-300">
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#121212] transition-colors duration-300 font-['Inter',sans-serif]">
+      {/* Offline Indicator */}
+      <OfflineIndicator />
+
       {/* Pull-to-Refresh 인디케이터 */}
       <PullToRefreshIndicator
         pullDistance={pullDistance}
         isRefreshing={isRefreshing}
       />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-sm transition-colors">
-        {/* Logo + Search + Actions */}
-        <div className="flex items-center gap-1.5 px-3 py-2">
-          <h1 className="text-base font-bold text-orange-500 whitespace-nowrap">
-
-          </h1>
-
-          <SearchBar
+      {/* Stitch-style Header */}
+      <header className="sticky top-0 z-50 bg-[#F8F9FA]/80 dark:bg-[#121212]/80 backdrop-blur-md px-4 pt-4 pb-2">
+        {/* Search Bar - Stitch style */}
+        <div className="relative flex items-center mb-4">
+          <span className="absolute left-3 text-slate-400 text-xl">🔍</span>
+          <input
+            type="text"
             value={searchQuery}
-            onChange={setSearchQuery}
-            onClear={handleClearSearch}
-            placeholder={t('searchPlaceholder')}
-            isFocused={isSearchFocused}
+            onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            recentSearches={recentSearches}
-            onSelectRecent={addSearch}
-            onRemoveRecent={removeSearch}
-            onClearAllRecent={clearRecentSearches}
+            placeholder={t('searchPlaceholder')}
+            className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2.5 pl-10 pr-12 text-sm focus:ring-2 focus:ring-[#FF4E00]/20 focus:outline-none"
           />
-
-          <HeaderActions
-            wishlistCount={wishlistCount}
-            onOpenShoppingMode={() => setShowShoppingMode(true)}
-            activeFilterCount={activeFilterCount}
-            onOpenFilter={() => setIsFilterOpen(true)}
-            locale={locale}
-            setLocale={setLocale}
-            localeNames={localeNames}
-            resolvedTheme={resolvedTheme}
-            toggleTheme={toggleTheme}
-            isFetching={isFetching}
-            onRefetch={() => refetch()}
-            t={t}
-          />
+          <button
+            onClick={() => setIsFilterOpen(true)}
+            className="absolute right-3 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            <span className="text-slate-500 text-xl">⚙️</span>
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF4E00] text-white text-[10px] rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Quick Filters */}
-        <QuickFilters
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          showWishlistOnly={showWishlistOnly}
-          setShowWishlistOnly={setShowWishlistOnly}
-          wishlistCount={wishlistCount}
-          compareCount={compareCount}
-          showComparePanel={showComparePanel}
-          setShowComparePanel={setShowComparePanel}
-          onResetAll={handleResetAll}
-          t={t}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-        />
-
-        {/* Store Filter */}
-        <div className="overflow-x-auto scrollbar-hide border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-          <div className="flex gap-1.5 px-4 py-2 min-w-max">
+        {/* Category Pills - Stitch style (horizontal scroll) */}
+        <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide pb-2">
+          {CATEGORY_KEYS.map((key) => (
             <button
-              onClick={() => setSelectedStore('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150
-                         ${selectedStore === 'all'
-                           ? 'bg-gray-800 dark:bg-white text-white dark:text-gray-900'
-                           : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+              key={key}
+              onClick={() => setSelectedCategory(key)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all
+                         ${selectedCategory === key
+                           ? 'bg-[#FF4E00] text-white'
+                           : 'bg-white dark:bg-[#1E1E1E] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
                          }`}
             >
-              전체 {storeCounts.all}개
+              {FILTER_ICONS[key]} {t(key as TranslationKey)}
             </button>
-            {Object.entries(STORES).map(([key, store]) => (
-              storeCounts[key] > 0 && (
-                <button
-                  key={key}
-                  onClick={() => setSelectedStore(key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150 flex items-center gap-1
-                             ${selectedStore === key
-                               ? 'text-white shadow-md'
-                               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-                             }`}
-                  style={selectedStore === key ? { backgroundColor: store.color } : {}}
-                >
-                  <span>{store.icon}</span>
-                  <span>{store.name}</span>
-                  <span className="opacity-70">{storeCounts[key]}</span>
-                </button>
-              )
-            ))}
-          </div>
-        </div>
-
-        {/* Category Filter */}
-        <div className="overflow-x-auto scrollbar-hide border-t border-gray-100 dark:border-gray-800">
-          <div className="flex gap-1 px-3 py-1 min-w-max">
-            {CATEGORY_KEYS.map((key) => (
-              <button
-                key={key}
-                onClick={() => setSelectedCategory(key)}
-                className={`px-2 py-0.5 rounded-md text-[10px] whitespace-nowrap transition-all duration-150
-                           ${selectedCategory === key
-                             ? 'bg-gray-700 dark:bg-gray-200 text-white dark:text-gray-900 font-medium'
-                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
-                           }`}
-              >
-                {FILTER_ICONS[key]} {t(key as any)}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="px-3 py-3 pb-24">
-        <ResultsSummary
-          productCount={filteredProducts.length}
-          searchQuery={searchQuery}
-          activeFilterCount={activeFilterCount}
-          onResetFilters={resetFilters}
-          lastUpdated={lastUpdated}
-          t={t}
-        />
+      {/* Main Content - Stitch style */}
+      <main className="px-4">
+        {/* Results summary - Stitch style */}
+        <div className="flex justify-between items-center py-3">
+          <div className="flex items-center gap-1">
+            <span className="font-bold text-lg text-slate-900 dark:text-white">{filteredProducts.length.toLocaleString()}</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">{t('productsFound')}</span>
+          </div>
+          <div className="flex items-center text-[11px] text-slate-400 gap-1 uppercase tracking-wider">
+            <span>🕐</span>
+            {lastUpdated && <span>Updated {lastUpdated}</span>}
+          </div>
+        </div>
 
         {showWishlistOnly && (
           <WishlistHeader
@@ -346,37 +281,94 @@ export default function Home() {
           />
         )}
 
-        <ProductGrid
-          products={filteredProducts}
-          isLoading={isLoading}
-          isError={isError}
-          error={error as Error}
-          onRetry={() => refetch()}
-          isFetching={isFetching}
-          isInWishlist={isInWishlist}
-          onToggleWishlist={toggleWishlist}
-          isInCompare={isInCompare}
-          onToggleCompare={toggleCompare}
-          compareCount={compareCount}
-          maxCompare={maxCompareItems}
-          onShare={shareProduct}
-          showWishlistOnly={showWishlistOnly}
-          onClearWishlistOnly={() => setShowWishlistOnly(false)}
-          activeFilterCount={activeFilterCount}
-          onResetFilters={resetFilters}
-          onClearSearch={handleClearSearch}
-          searchQuery={searchQuery}
-          t={t}
-          viewMode={viewMode}
-        />
+        {/* Product Grid */}
+        <div className="pb-28">
+          <ProductGrid
+            products={filteredProducts}
+            isLoading={isLoading}
+            isError={isError}
+            error={error as Error}
+            onRetry={() => refetch()}
+            isFetching={isFetching}
+            isInWishlist={isInWishlist}
+            onToggleWishlist={toggleWishlist}
+            isInCompare={isInCompare}
+            onToggleCompare={toggleCompare}
+            compareCount={compareCount}
+            maxCompare={maxCompareItems}
+            onShare={shareProduct}
+            showWishlistOnly={showWishlistOnly}
+            onClearWishlistOnly={() => setShowWishlistOnly(false)}
+            activeFilterCount={activeFilterCount}
+            onResetFilters={resetFilters}
+            onClearSearch={handleClearSearch}
+            searchQuery={searchQuery}
+            t={t}
+            viewMode={viewMode}
+            onSearchSuggestion={(query) => {
+              setSearchQuery(query)
+              addSearch(query)
+            }}
+          />
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 py-1.5 text-center z-30 transition-colors">
-        <p className="text-[10px] text-gray-400 dark:text-gray-500">
-          {t('appTagline')}
-        </p>
-      </footer>
+      {/* Stitch-style Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#1E1E1E]/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 py-3 pb-8 flex justify-between items-center z-50">
+        <button
+          onClick={() => {
+            setShowWishlistOnly(false)
+            setSelectedCategory('all')
+          }}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            !showWishlistOnly ? 'text-[#FF4E00]' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+          }`}
+        >
+          <span className="text-xl">🧭</span>
+          <span className="text-[10px] font-bold">Discover</span>
+        </button>
+
+        <button
+          onClick={() => setShowWishlistOnly(true)}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            showWishlistOnly ? 'text-[#FF4E00]' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+          }`}
+        >
+          <span className="text-xl">🔖</span>
+          <span className="text-[10px] font-medium">Saved</span>
+          {wishlistCount > 0 && (
+            <span className="absolute -top-1 ml-4 w-4 h-4 bg-[#FF4E00] text-white text-[9px] rounded-full flex items-center justify-center">
+              {wishlistCount}
+            </span>
+          )}
+        </button>
+
+        {/* Center floating action button */}
+        <div className="relative -top-4">
+          <button
+            onClick={() => setShowShoppingMode(true)}
+            className="bg-[#FF4E00] text-white p-4 rounded-full shadow-lg shadow-[#FF4E00]/30 active:scale-95 transition-transform"
+          >
+            <span className="text-2xl">➕</span>
+          </button>
+        </div>
+
+        <button
+          onClick={() => refetch()}
+          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+        >
+          <span className={`text-xl ${isFetching ? 'animate-spin' : ''}`}>🔄</span>
+          <span className="text-[10px] font-medium">Refresh</span>
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+        >
+          <span className="text-xl">{resolvedTheme === 'dark' ? '🌙' : '☀️'}</span>
+          <span className="text-[10px] font-medium">Theme</span>
+        </button>
+      </nav>
 
       {/* Floating Components */}
       <ScrollTopButton />
@@ -413,8 +405,27 @@ export default function Home() {
         checkedIds={checkedIds}
       />
 
+      <StoreLocator
+        isOpen={isStoreLocatorOpen}
+        onClose={closeStoreLocator}
+        filterStore={filterStore}
+      />
+
+      <BarcodeScanner
+        isOpen={isScannerOpen}
+        onClose={closeScanner}
+        onScan={(code) => {
+          setSearchQuery(code)
+          addSearch(code)
+          showToast(`바코드 "${code}" 검색`, 'success')
+        }}
+      />
+
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Onboarding */}
+      {showOnboarding && <Onboarding onComplete={completeOnboarding} />}
 
       {/* Global Styles */}
       <style jsx global>{`

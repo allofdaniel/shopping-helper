@@ -1,0 +1,53 @@
+{
+  "packageId": "app.vercel.shopping_helper",
+  "host": "web-keprojects.vercel.app",
+  "name": "꿀템장바구니",
+  "launcherName": "꿀템장바구니",
+  "display": "standalone",
+  "themeColor": "#F97316",
+  "themeColorDark": "#EA580C",
+  "navigationColor": "#FFFFFF",
+  "navigationColorDark": "#1F2937",
+  "navigationDividerColor": "#E5E7EB",
+  "navigationDividerColorDark": "#374151",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://web-keprojects.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://web-keprojects.vercel.app/icon-512.png",
+  "monochromeIconUrl": "https://web-keprojects.vercel.app/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./signing.keystore",
+    "alias": "my-key-alias"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 2,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://web-keprojects.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "playBilling": {
+      "enabled": false
+    },
+    "locationDelegation": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://web-keprojects.vercel.app/",
+  "minSdkVersion": 23,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "serviceAccountJsonFile": "",
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.0.0"
+}

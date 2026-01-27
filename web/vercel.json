@@ -5,14 +5,51 @@
   "installCommand": "npm install",
   "env": {
     "NEXT_PUBLIC_USE_S3_API": "false",
-    "CACHE_BUST": "20260115-v2"
+    "CACHE_BUST": "20260124-v3"
   },
   "build": {
     "env": {
       "NEXT_PUBLIC_USE_S3_API": "false"
     }
   },
+  "rewrites": [
+    {
+      "source": "/.well-known/:path*",
+      "destination": "/.well-known/:path*"
+    }
+  ],
   "headers": [
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
+      ]
+    },
+    {
+      "source": "/data/(.*).json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300, stale-while-revalidate=600"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

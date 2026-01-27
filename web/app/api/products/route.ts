@@ -117,26 +117,30 @@ async function loadAllProducts(baseUrl?: string) {
     return allProductsCache
   }
 
-  const allProducts: any[] = []
+  // 병렬 로드로 성능 최적화 (N+1 문제 해결)
+  const loadResults = await Promise.all(
+    STORES.map(async (store) => {
+      try {
+        let products: any[] = []
+        // Vercel 환경에서는 HTTP로, 로컬에서는 파일 시스템으로 로드
+        if (isVercel && baseUrl) {
+          products = await loadProductsViaHttp(store, baseUrl)
+        } else {
+          products = await loadProductsViaFs(store)
+        }
+        return products.map(product => ({
+          ...product,
+          store_key: product.store_key || store,
+          store_name: product.store_name || getStoreName(store),
+        }))
+      } catch (err) {
+        console.error(`[API] Failed to load ${store}:`, err)
+        return []
+      }
+    })
+  )
 
-  for (const store of STORES) {
-    let products: any[] = []
-
-    // Vercel 환경에서는 HTTP로, 로컬에서는 파일 시스템으로 로드
-    if (isVercel && baseUrl) {
-      products = await loadProductsViaHttp(store, baseUrl)
-    } else {
-      products = await loadProductsViaFs(store)
-    }
-
-    for (const product of products) {
-      allProducts.push({
-        ...product,
-        store_key: product.store_key || store,
-        store_name: product.store_name || getStoreName(store),
-      })
-    }
-  }
+  const allProducts = loadResults.flat()
 
   // 중복 제거
   const deduplicated = deduplicateProducts(allProducts)
