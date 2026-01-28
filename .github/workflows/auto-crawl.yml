@@ -56,6 +56,9 @@ jobs:
           S3_BUCKET=notam-korea-data
           DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
           SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+          GMAIL_USER=${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+          NOTIFY_EMAIL=${{ secrets.NOTIFY_EMAIL }}
           EOF
 
       - name: Run crawling pipeline
@@ -202,6 +205,13 @@ jobs:
               }' \
               $DISCORD_WEBHOOK_URL
           fi
+
+      - name: Send email report
+        if: success()
+        continue-on-error: true
+        run: |
+          cd crawler
+          python email_notifier.py
 
       - name: Send Discord notification on failure
         if: failure()
