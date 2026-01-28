@@ -1,0 +1,173 @@
+{
+  "updated_at": "2026-01-28T11:10:48.186129+09:00",
+  "total_products": 1189,
+  "total_videos": 1431,
+  "matched_products": 1187,
+  "match_rate": 99.8,
+  "new_today": 0,
+  "stores": [
+    {
+      "key": "daiso",
+      "name": "다이소",
+      "icon": "🏪",
+      "count": 739,
+      "new_today": 0,
+      "pct": 62.2
+    },
+    {
+      "key": "costco",
+      "name": "코스트코",
+      "icon": "🛒",
+      "count": 375,
+      "new_today": 0,
+      "pct": 31.5
+    },
+    {
+      "key": "ikea",
+      "name": "이케아",
+      "icon": "🪑",
+      "count": 75,
+      "new_today": 0,
+      "pct": 6.3
+    }
+  ],
+  "popular_products": [
+    {
+      "name": "타포린 다이소 가방",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 2000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20231205/f6NmDsDD5p0mRKiIsrFI1021402_00_00f6NmDsDD5p0mRKiIsrFI.jpg",
+      "views": 3661713,
+      "category": "가방"
+    },
+    {
+      "name": "미니 대형 액정 주방 타이머",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 2000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20240911/C7l0pUwupxZ1W8mnWdb11052275_00_00C7l0pUwupxZ1W8mnWdb1.jpg",
+      "views": 1980179,
+      "category": "주방"
+    },
+    {
+      "name": "직사각 강화 유리 주방 저울 1 kg",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 5000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20231215/UuQcceE0GCKTumlaxw3i1029483_00_01UuQcceE0GCKTumlaxw3i.jpg",
+      "views": 1980179,
+      "category": "주방"
+    },
+    {
+      "name": "실리콘 스푼 대형",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 1000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20250711/EC5CQTh5kTCj2zrPMBqW1019215_00_00EC5CQTh5kTCj2zrPMBqW.jpg",
+      "views": 1980179,
+      "category": "실리콘"
+    },
+    {
+      "name": "실리콘 미니 요리 스푼 2개입",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 1000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20251208/WPH1Yrd2fjy6HJqbdP0G1058024_00_00WPH1Yrd2fjy6HJqbdP0G.jpg",
+      "views": 1980179,
+      "category": "실리콘"
+    },
+    {
+      "name": "실리콘 미니 요리 스푼",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 1000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20240305/gQtAx0VqbQlX70w7cHJY1044020_00_00gQtAx0VqbQlX70w7cHJY.jpg",
+      "views": 1980179,
+      "category": "실리콘"
+    },
+    {
+      "name": "스푼 포함 3가지 타입 유리 양념통 300 ml",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 2000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20251205/8HJ1btNr339ocenz3aKs1066558_00_008HJ1btNr339ocenz3aKs.jpg",
+      "views": 1980179,
+      "category": "유리"
+    },
+    {
+      "name": "일체형 스푼 유리 양념통 270 ml",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 1000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20251201/E65CjQeXV2tHoOeS7ZVi1066560_00_01E65CjQeXV2tHoOeS7ZVi.jpg",
+      "views": 1980179,
+      "category": "유리"
+    },
+    {
+      "name": "유리 양념통 290 ml 스푼 포함",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 1000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20251201/wTHiGptiiCUy5w8ZeglQ1066556_00_00wTHiGptiiCUy5w8ZeglQ.jpg",
+      "views": 1980179,
+      "category": "유리"
+    },
+    {
+      "name": "3가지 타입 유리 양념병 150ml",
+      "store": "daiso",
+      "store_name": "다이소",
+      "price": 1000,
+      "image_url": "https://www.daisomall.co.kr/file/PD/20251205/PFii6IkXPRiG0UP2pRiG1062965_00_01PFii6IkXPRiG0UP2pRiG.jpg",
+      "views": 1980179,
+      "category": "유리"
+    }
+  ],
+  "categories": [
+    {
+      "name": "케이블",
+      "count": 135
+    },
+    {
+      "name": "수납",
+      "count": 98
+    },
+    {
+      "name": "욕실",
+      "count": 91
+    },
+    {
+      "name": "침구",
+      "count": 66
+    },
+    {
+      "name": "베개",
+      "count": 57
+    },
+    {
+      "name": "주방",
+      "count": 55
+    },
+    {
+      "name": "치즈",
+      "count": 53
+    },
+    {
+      "name": "유리",
+      "count": 50
+    },
+    {
+      "name": "정리함",
+      "count": 49
+    },
+    {
+      "name": "인테리어",
+      "count": 42
+    }
+  ],
+  "price_stats": {
+    "min": 1000,
+    "max": 14290000,
+    "avg": 491070
+  }
+}

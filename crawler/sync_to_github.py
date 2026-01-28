@@ -10,13 +10,15 @@ import json
 import sqlite3
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+KST = timezone(timedelta(hours=9))
 
 # 경로 설정
 BASE_DIR = Path(__file__).parent          # crawler/
@@ -90,7 +92,7 @@ def export_store_json(conn, store_key, output_path):
 
     # API가 기대하는 형식: { "products": [...] }
     data = {
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.now(KST).isoformat(),
         "total": len(products),
         "products": products,
     }
@@ -117,7 +119,7 @@ def export_all_products(conn, output_path):
     products = [clean_product(row_to_dict(row)) for row in cursor.fetchall()]
 
     data = {
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.now(KST).isoformat(),
         "total": len(products),
         "products": products,
     }
@@ -136,7 +138,7 @@ def export_videos(conn, output_path):
         videos = [dict(row) for row in cursor.fetchall()]
 
         data = {
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": datetime.now(KST).isoformat(),
             "total": len(videos),
             "videos": videos,
         }
@@ -153,7 +155,7 @@ def export_videos(conn, output_path):
 def export_summary(store_counts, total_products, total_videos, output_path):
     """통계 요약 JSON"""
     summary = {
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.now(KST).isoformat(),
         "total_products": total_products,
         "total_videos": total_videos,
         "stores": store_counts,
@@ -176,7 +178,7 @@ STORE_ICONS = {
 def export_report(conn, store_counts, total_products, total_videos, output_path):
     """크롤링 리포트 JSON (웹 대시보드용)"""
     cursor = conn.cursor()
-    now = datetime.now()
+    now = datetime.now(KST)
 
     # 매칭된 상품 수
     cursor.execute("SELECT COUNT(*) FROM products WHERE is_hidden = 0 AND is_matched = 1")
