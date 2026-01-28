@@ -442,7 +442,7 @@ export const ProductCard = memo(function ProductCard({
                 <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/30 dark:to-orange-900/30 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
                   <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400 font-semibold text-sm mb-2">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    유튜버 추천 이유
+                    유튜버 추천
                     {timestampDisplay && (
                       <span className="ml-auto text-yellow-600 dark:text-yellow-500 text-xs font-normal flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -450,9 +450,21 @@ export const ProductCard = memo(function ProductCard({
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic mb-3">
                     "{product.recommendation_quote}"
                   </p>
+                  <div className="flex items-center gap-3 text-xs text-yellow-700/80 dark:text-yellow-400/80 pt-2 border-t border-yellow-200/50 dark:border-yellow-700/50">
+                    {product.channel_title && (
+                      <span className="flex items-center gap-1">
+                        📺 {product.channel_title}
+                      </span>
+                    )}
+                    {product.created_at && (
+                      <span className="flex items-center gap-1">
+                        📅 {formatDate(product.created_at)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 
