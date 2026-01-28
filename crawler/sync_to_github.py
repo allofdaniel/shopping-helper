@@ -163,6 +163,121 @@ def export_summary(store_counts, total_products, total_videos, output_path):
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
 
+STORE_NAMES = {
+    'daiso': '다이소', 'costco': '코스트코', 'ikea': '이케아',
+    'oliveyoung': '올리브영', 'traders': '트레이더스', 'convenience': '편의점',
+}
+STORE_ICONS = {
+    'daiso': '🏪', 'costco': '🛒', 'ikea': '🪑',
+    'oliveyoung': '💄', 'traders': '🏬', 'convenience': '🏪',
+}
+
+
+def export_report(conn, store_counts, total_products, total_videos, output_path):
+    """크롤링 리포트 JSON (웹 대시보드용)"""
+    cursor = conn.cursor()
+    now = datetime.now()
+
+    # 매칭된 상품 수
+    cursor.execute("SELECT COUNT(*) FROM products WHERE is_hidden = 0 AND is_matched = 1")
+    matched = cursor.fetchone()[0]
+
+    # 오늘 신규 상품
+    today_str = now.strftime('%Y-%m-%d')
+    cursor.execute(
+        "SELECT COUNT(*) FROM products WHERE is_hidden = 0 AND DATE(created_at) = ?",
+        (today_str,)
+    )
+    new_today = cursor.fetchone()[0]
+
+    # 매장별 오늘 신규
+    cursor.execute("""
+        SELECT store_key, COUNT(*) FROM products
+        WHERE is_hidden = 0 AND DATE(created_at) = ?
+        GROUP BY store_key
+    """, (today_str,))
+    new_by_store = dict(cursor.fetchall())
+
+    # 인기 상품 TOP 10
+    cursor.execute("""
+        SELECT p.name, p.store_key, p.price,
+               p.official_name, p.official_price, p.official_image_url,
+               p.source_view_count, p.category
+        FROM products p
+        WHERE p.is_hidden = 0
+        ORDER BY p.source_view_count DESC
+        LIMIT 10
+    """)
+    popular = []
+    for row in cursor.fetchall():
+        popular.append({
+            "name": row[3] or row[0],
+            "store": row[1],
+            "store_name": STORE_NAMES.get(row[1], row[1]),
+            "price": row[4] or row[2],
+            "image_url": row[5],
+            "views": row[6],
+            "category": row[7],
+        })
+
+    # 카테고리 분포 TOP 10
+    cursor.execute("""
+        SELECT category, COUNT(*) as cnt FROM products
+        WHERE is_hidden = 0 AND category IS NOT NULL AND category != ''
+        GROUP BY category ORDER BY cnt DESC LIMIT 10
+    """)
+    categories = [{"name": row[0], "count": row[1]} for row in cursor.fetchall()]
+
+    # 가격 통계
+    cursor.execute("""
+        SELECT
+            MIN(COALESCE(official_price, price)),
+            MAX(COALESCE(official_price, price)),
+            AVG(COALESCE(official_price, price))
+        FROM products
+        WHERE is_hidden = 0 AND COALESCE(official_price, price) > 0
+    """)
+    price_row = cursor.fetchone()
+
+    # 매장별 상세 정보
+    stores_detail = []
+    for store_key in ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'convenience']:
+        count = store_counts.get(store_key, 0)
+        if count > 0:
+            stores_detail.append({
+                "key": store_key,
+                "name": STORE_NAMES.get(store_key, store_key),
+                "icon": STORE_ICONS.get(store_key, '🏪'),
+                "count": count,
+                "new_today": new_by_store.get(store_key, 0),
+                "pct": round(count / total_products * 100, 1) if total_products > 0 else 0,
+            })
+
+    match_rate = round(matched / total_products * 100, 1) if total_products > 0 else 0
+
+    report = {
+        "updated_at": now.isoformat(),
+        "total_products": total_products,
+        "total_videos": total_videos,
+        "matched_products": matched,
+        "match_rate": match_rate,
+        "new_today": new_today,
+        "stores": stores_detail,
+        "popular_products": popular,
+        "categories": categories,
+        "price_stats": {
+            "min": int(price_row[0]) if price_row[0] else 0,
+            "max": int(price_row[1]) if price_row[1] else 0,
+            "avg": int(price_row[2]) if price_row[2] else 0,
+        },
+    }
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"  report.json: {total_products} products, {new_today} new today, {match_rate}% matched")
+
+
 def main():
     """메인 동기화 함수"""
     logger.info("=== Starting Data Export ===")
@@ -197,6 +312,9 @@ def main():
 
     # 4. 통계 요약
     export_summary(store_counts, total_products, video_count, OUTPUT_DIR / 'summary.json')
+
+    # 5. 크롤링 리포트 (웹 대시보드용)
+    export_report(conn, store_counts, total_products, video_count, OUTPUT_DIR / 'report.json')
 
     conn.close()
 
