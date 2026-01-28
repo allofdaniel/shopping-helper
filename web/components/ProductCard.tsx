@@ -3,8 +3,8 @@
 import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2, Plus } from 'lucide-react'
 import type { Product, StoreLocation } from '@/lib/types'
 import { STORES } from '@/lib/types'
-import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl } from '@/lib/api'
-import { useState, useCallback, memo } from 'react'
+import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl, validateExternalUrl } from '@/lib/api'
+import { useState, useCallback, memo, useEffect } from 'react'
 
 interface ProductCardProps {
   product: Product
@@ -100,11 +100,21 @@ export const ProductCard = memo(function ProductCard({
     setShowDetail(true)
   }, [])
 
-  const handleCloseDetail = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleCloseDetail = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
     setShowDetail(false)
     setShowVideo(false) // 영상도 멈춤
   }, [])
+
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    if (!showDetail) return
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleCloseDetail()
+    }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [showDetail, handleCloseDetail])
 
   // 찜하기 토글
   const handleWishlistToggle = useCallback((e: React.MouseEvent) => {
@@ -212,11 +222,11 @@ export const ProductCard = memo(function ProductCard({
             </span>
           )}
 
-          {/* 찜하기 버튼 - 우상단 (Stitch style) */}
+          {/* 찜하기 버튼 - 우상단 (Stitch style) - 44x44px 터치 영역 확보 */}
           {onToggleWishlist && (
             <button
               onClick={handleWishlistToggle}
-              className="absolute top-1.5 right-1.5 p-1"
+              className="absolute top-0.5 right-0.5 p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label={isInWishlist ? '찜 해제' : '찜하기'}
             >
               <Heart
@@ -229,13 +239,13 @@ export const ProductCard = memo(function ProductCard({
             </button>
           )}
 
-          {/* 장바구니 추가 버튼 - 우하단 (Stitch style) */}
+          {/* 장바구니 추가 버튼 - 우하단 (Stitch style) - 44x44px 터치 영역 확보 */}
           <button
             onClick={(e) => {
               e.stopPropagation()
               if (onToggleWishlist) onToggleWishlist(product.id)
             }}
-            className="absolute bottom-1.5 right-1.5 bg-white/90 dark:bg-black/60 backdrop-blur p-1.5 rounded-lg shadow-sm hover:bg-white dark:hover:bg-black/80 transition-colors"
+            className="absolute bottom-0.5 right-0.5 bg-white/90 dark:bg-black/60 backdrop-blur p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg shadow-sm hover:bg-white dark:hover:bg-black/80 transition-colors"
             aria-label="장바구니 담기"
           >
             <Plus className="w-4 h-4 text-[#FF4E00]" strokeWidth={2.5} />
@@ -261,7 +271,7 @@ export const ProductCard = memo(function ProductCard({
         </div>
       </article>
 
-      {/* 상세 모달 - 풀스크린 방식으로 변경 */}
+      {/* 상세 모달 - 풀스크린 방식 */}
       {showDetail && (
         <div
           className="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center"
@@ -626,23 +636,26 @@ export const ProductCard = memo(function ProductCard({
                 )}
               </div>
 
-              {/* 온라인 구매 링크 (있을 때만) */}
-              {(product.official_product_url || product.product_url) && (
-                <a
-                  href={product.official_product_url || product.product_url || ''}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border-2"
-                  style={{
-                    borderColor: store?.color || '#666',
-                    color: store?.color || '#666'
-                  }}
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  온라인 매장에서 보기
-                </a>
-              )}
+              {/* 온라인 구매 링크 (있을 때만) - URL 검증 필수 */}
+              {(() => {
+                const safeUrl = validateExternalUrl(product.official_product_url) || validateExternalUrl(product.product_url)
+                return safeUrl ? (
+                  <a
+                    href={safeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border-2"
+                    style={{
+                      borderColor: store?.color || '#666',
+                      color: store?.color || '#666'
+                    }}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    온라인 매장에서 보기
+                  </a>
+                ) : null
+              })()}
 
               {/* 공식 상품 링크 (없을 때 대체) */}
               {!product.official_product_url && !product.product_url && (

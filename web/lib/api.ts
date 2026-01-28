@@ -142,6 +142,28 @@ export function formatPrice(price: number | null | undefined): string {
   return priceFormatter.format(price) + '원'
 }
 
+/**
+ * 외부 URL 검증 - XSS 및 javascript: URL 방지
+ * @returns 유효한 https URL이면 원본 반환, 아니면 null
+ */
+export function validateExternalUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+
+  try {
+    const parsed = new URL(url)
+    // https만 허용 (http도 보안상 차단)
+    if (parsed.protocol !== 'https:') {
+      console.warn('[URL] Non-HTTPS URL blocked:', url.substring(0, 50))
+      return null
+    }
+    return url
+  } catch {
+    // URL 파싱 실패 (잘못된 URL)
+    console.warn('[URL] Invalid URL:', url?.substring(0, 50))
+    return null
+  }
+}
+
 export function formatViewCount(count: number): string {
   if (count >= 10000) {
     return (count / 10000).toFixed(1) + '만'
