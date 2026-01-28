@@ -63,7 +63,7 @@ export default function Home() {
   // UI State
   const [selectedStore, setSelectedStore] = useState<StoreFilter>('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
-  const [sortBy, setSortBy] = useState<SortOption>('popular')
+  const [sortBy, setSortBy] = useState<SortOption>('new')
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearchQuery = useDebounce(searchQuery, 300) // Debounce search for better performance
   const [isSearchFocused, setIsSearchFocused] = useState(false)
