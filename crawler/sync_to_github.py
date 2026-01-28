@@ -38,6 +38,8 @@ PRODUCT_FIELDS = [
     'is_matched', 'is_approved', 'source_view_count', 'created_at',
     'recommendation_quote', 'store_locations', 'product_code_display',
     'availability_note', 'rating', 'review_count', 'order_count',
+    # YouTube 영상 정보 (JOIN으로 가져옴)
+    'video_title', 'channel_title', 'thumbnail_url', 'video_view_count',
 ]
 
 
