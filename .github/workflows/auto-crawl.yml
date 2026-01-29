@@ -60,6 +60,28 @@ jobs:
           GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
           NOTIFY_EMAIL=${{ secrets.NOTIFY_EMAIL }}
           EOF
+          mkdir -p ../data
+
+      - name: Download existing DB from S3
+        continue-on-error: true
+        run: |
+          python -c "
+          import boto3
+          s3 = boto3.client('s3',
+              aws_access_key_id='${{ secrets.AWS_ACCESS_KEY_ID }}',
+              aws_secret_access_key='${{ secrets.AWS_SECRET_ACCESS_KEY }}',
+              region_name='ap-southeast-2')
+          try:
+              s3.download_file('notam-korea-data', 'shopping-helper/db/products_latest.db', 'data/products.db')
+              import sqlite3
+              conn = sqlite3.connect('data/products.db')
+              total = conn.execute('SELECT COUNT(*) FROM products').fetchone()[0]
+              print(f'Existing DB loaded: {total} products')
+              conn.close()
+          except Exception as e:
+              print(f'No existing DB in S3: {e}')
+              print('Starting with fresh DB')
+          "
 
       - name: Run crawling pipeline
         run: |

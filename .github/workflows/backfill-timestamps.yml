@@ -1,0 +1,117 @@
+# 타임스탬프 백필 워크플로우
+# S3에서 DB 다운로드 → 자막 재추출 → 타임스탬프 업데이트 → S3 업로드 + JSON 동기화
+
+name: Backfill Timestamps
+
+on:
+  workflow_dispatch:  # 수동 실행만
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+
+      - name: Create .env and data directory
+        run: |
+          cd crawler
+          cat > .env << EOF
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION=ap-southeast-2
+          S3_BUCKET=notam-korea-data
+          EOF
+          mkdir -p ../data
+
+      - name: Download DB from S3
+        run: |
+          pip install boto3
+          python -c "
+          import boto3, os
+          s3 = boto3.client('s3',
+              aws_access_key_id='${{ secrets.AWS_ACCESS_KEY_ID }}',
+              aws_secret_access_key='${{ secrets.AWS_SECRET_ACCESS_KEY }}',
+              region_name='ap-southeast-2')
+          s3.download_file('notam-korea-data', 'shopping-helper/db/products_latest.db', 'data/products.db')
+          print('DB downloaded from S3')
+
+          import sqlite3
+          conn = sqlite3.connect('data/products.db')
+          total = conn.execute('SELECT COUNT(*) FROM products').fetchone()[0]
+          with_ts = conn.execute('SELECT COUNT(*) FROM products WHERE timestamp_sec IS NOT NULL AND timestamp_sec > 0').fetchone()[0]
+          print(f'Products: {total}, With timestamp: {with_ts}')
+          conn.close()
+          "
+
+      - name: Run timestamp backfill
+        run: |
+          cd crawler
+          python -u backfill_timestamps.py
+
+      - name: Upload updated DB to S3
+        run: |
+          python -c "
+          import boto3, os
+          s3 = boto3.client('s3',
+              aws_access_key_id='${{ secrets.AWS_ACCESS_KEY_ID }}',
+              aws_secret_access_key='${{ secrets.AWS_SECRET_ACCESS_KEY }}',
+              region_name='ap-southeast-2')
+          s3.upload_file('data/products.db', 'notam-korea-data', 'shopping-helper/db/products_latest.db')
+          print('Updated DB uploaded to S3')
+          "
+
+      - name: Sync data to web/public/data/
+        run: |
+          cd crawler
+          python sync_to_github.py
+
+      - name: Commit and push data
+        run: |
+          git config user.email "bot@shopping-helper.local"
+          git config user.name "Shopping Helper Bot"
+          git add web/public/data/
+
+          if git diff --cached --quiet; then
+            echo "No data changes to commit"
+          else
+            TIMESTAMP=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M')
+            git commit -m "data: Backfill timestamps ${TIMESTAMP}"
+            git push
+            echo "Timestamp data synced and pushed!"
+          fi
+
+      - name: Print results
+        run: |
+          python -c "
+          import sqlite3
+          conn = sqlite3.connect('data/products.db')
+          total = conn.execute('SELECT COUNT(*) FROM products').fetchone()[0]
+          with_ts = conn.execute('SELECT COUNT(*) FROM products WHERE timestamp_sec IS NOT NULL AND timestamp_sec > 0').fetchone()[0]
+          conn.close()
+          print(f'## Backfill Results')
+          print(f'- Total products: {total}')
+          print(f'- With timestamp: {with_ts} ({with_ts/total*100:.1f}%)')
+          print(f'- Without timestamp: {total - with_ts} ({(total-with_ts)/total*100:.1f}%)')
+          " >> $GITHUB_STEP_SUMMARY
