@@ -194,7 +194,12 @@ export const ProductCard = memo(function ProductCard({
                 decoding="async"
               />
               {/* Video play overlay */}
-              <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent flex flex-col justify-end p-2">
+                <p className="text-white text-[11px] font-semibold leading-tight line-clamp-2 drop-shadow-md">
+                  {product.official_name || product.name}
+                </p>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <Play className="w-8 h-8 text-white opacity-80" fill="white" />
               </div>
             </div>
@@ -388,8 +393,8 @@ export const ProductCard = memo(function ProductCard({
                       <Play className="w-10 h-10 text-white" fill="white" />
                     </div>
                   </div>
-                  <span className="absolute bottom-2 left-2 text-white text-xs bg-black/70 px-2 py-1 rounded">
-                    클릭하여 영상 재생
+                  <span className="absolute bottom-2 left-2 text-white text-xs bg-black/70 px-2 py-1 rounded max-w-[70%] truncate">
+                    {timestampDisplay ? `${timestampDisplay}부터 재생` : '클릭하여 영상 재생'}
                   </span>
                 </div>
               ) : (

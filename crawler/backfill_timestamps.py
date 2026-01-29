@@ -316,6 +316,9 @@ def phase4_estimate_from_position():
                     estimated_sec = start_offset + int(usable * idx / (n - 1)) if n > 1 else start_offset
 
             estimated_sec = max(0, min(estimated_sec, duration - 1))
+            # Videos > 30s: ensure minimum 5s offset (avoid useless 0:00)
+            if duration > 30 and estimated_sec < 5:
+                estimated_sec = max(5, int(duration * 0.03))
             ts_text = seconds_to_timestamp(estimated_sec)
             update_product_timestamp(conn, p['id'], estimated_sec, ts_text)
             updated += 1
@@ -340,21 +343,29 @@ def _interpolate_timestamp(target_idx, total_products, duration, known_timestamp
             if after is None or idx < after[0]:
                 after = (idx, ts)
 
+    intro_offset = int(duration * 0.05) if duration else 5
+    outro_offset = int(duration * 0.95) if duration else duration
+
     if before and after and before[0] != after[0]:
         # 선형 보간
         ratio = (target_idx - before[0]) / (after[0] - before[0])
         return int(before[1] + ratio * (after[1] - before[1]))
     elif before:
-        # 앞의 값만 있으면 뒤로 추정
-        avg_gap = before[1] / max(before[0], 1)
-        return int(before[1] + avg_gap * (target_idx - before[0]))
+        # 앞의 값만 있으면: 마지막 알려진 값 ~ outro 구간에 균등 분배
+        remaining = total_products - 1 - before[0]
+        if remaining > 0:
+            position = target_idx - before[0]
+            return int(before[1] + position * (outro_offset - before[1]) / remaining)
+        return before[1]
     elif after:
-        # 뒤의 값만 있으면 앞으로 추정
-        avg_gap = after[1] / max(after[0], 1)
-        return max(0, int(after[1] - avg_gap * (after[0] - target_idx)))
+        # 뒤의 값만 있으면: intro ~ 첫 번째 알려진 값 구간에 균등 분배
+        if after[0] > 0:
+            ratio = target_idx / after[0]
+            return int(intro_offset + ratio * (after[1] - intro_offset))
+        return intro_offset
     else:
         # 균등 분배 폴백
-        return int(duration * 0.05 + duration * 0.9 * target_idx / max(total_products - 1, 1))
+        return int(intro_offset + (outro_offset - intro_offset) * target_idx / max(total_products - 1, 1))
 
 
 def main():

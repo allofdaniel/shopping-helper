@@ -188,6 +188,38 @@ export default function Home() {
       result.sort((a, b) => (b.review_count || 0) - (a.review_count || 0))
     }
 
+    // Video diversity: prevent consecutive products from same video
+    // Only for sort modes where clustering is likely (popular, new, recommended)
+    if (['popular', 'new', 'recommended'].includes(sortBy) && result.length > 3) {
+      const diversified: Product[] = []
+      const remaining = [...result]
+      const MAX_CONSECUTIVE = 2 // max same-video products in a row
+
+      while (remaining.length > 0) {
+        // Count how many recent items share the same video_id
+        let recentVideoCount = 0
+        const lastVideoId = diversified.length > 0 ? diversified[diversified.length - 1]?.video_id : null
+        if (lastVideoId) {
+          for (let j = diversified.length - 1; j >= 0 && j >= diversified.length - MAX_CONSECUTIVE; j--) {
+            if (diversified[j]?.video_id === lastVideoId) recentVideoCount++
+            else break
+          }
+        }
+
+        // Find next product: prefer different video_id if we hit the limit
+        let picked = 0
+        if (recentVideoCount >= MAX_CONSECUTIVE && lastVideoId) {
+          const diffIdx = remaining.findIndex(p => p.video_id !== lastVideoId)
+          if (diffIdx !== -1) picked = diffIdx
+          // If all remaining are same video, just take the next one
+        }
+
+        diversified.push(remaining[picked])
+        remaining.splice(picked, 1)
+      }
+      result = diversified
+    }
+
     return result
   }, [products, selectedStore, selectedCategory, debouncedSearchQuery, sortBy, showWishlistOnly, wishlistIds, applyFilters])
 
