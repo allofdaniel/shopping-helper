@@ -89,6 +89,12 @@ jobs:
           print('\n=== 크롤링 완료 ===')
           "
 
+      - name: Backfill timestamps for existing products
+        continue-on-error: true
+        run: |
+          cd crawler
+          python backfill_timestamps.py
+
       - name: Upload to S3
         continue-on-error: true
         run: |
