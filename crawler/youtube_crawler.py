@@ -255,9 +255,30 @@ class YouTubeCrawler:
             # 검색으로 fallback
             return self.get_channel_id_by_name(handle)
 
+    @staticmethod
+    def _format_transcript_with_timestamps(fetched) -> str:
+        """자막 snippet 목록을 [MM:SS] 타임스탬프 포함 텍스트로 변환"""
+        parts = []
+        for snippet in fetched:
+            text = snippet.text.strip()
+            if not text:
+                continue
+            start = getattr(snippet, 'start', None)
+            if start is not None:
+                total_sec = int(start)
+                mins = total_sec // 60
+                secs = total_sec % 60
+                parts.append(f"[{mins}:{secs:02d}] {text}")
+            else:
+                parts.append(text)
+        return " ".join(parts)
+
     def get_video_transcript(self, video_id: str, languages: list = None,
                                retry_count: int = 3, retry_delay: float = 2.0) -> Optional[str]:
-        """영상 자막 추출 (Rate limiting 대응) - youtube-transcript-api v1.2+ 지원"""
+        """영상 자막 추출 (Rate limiting 대응) - youtube-transcript-api v1.2+ 지원
+
+        반환 형식: "[0:30] 텍스트 [0:45] 텍스트 ..." (타임스탬프 포함)
+        """
         if not TRANSCRIPT_AVAILABLE:
             return None
 
@@ -289,16 +310,14 @@ class YouTubeCrawler:
 
                     if selected_lang:
                         fetched = api.fetch(video_id, languages=[selected_lang])
-                        text = " ".join([snippet.text for snippet in fetched])
-                        return text
+                        return self._format_transcript_with_timestamps(fetched)
 
                 except Exception as list_error:
                     # list가 실패하면 직접 fetch 시도
                     for lang in languages:
                         try:
                             fetched = api.fetch(video_id, languages=[lang])
-                            text = " ".join([snippet.text for snippet in fetched])
-                            return text
+                            return self._format_transcript_with_timestamps(fetched)
                         except Exception:
                             continue
 
