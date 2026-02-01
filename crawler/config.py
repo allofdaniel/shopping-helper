@@ -108,6 +108,12 @@ STORE_CATEGORIES = {
         "mall_url": "https://emart24.co.kr",
         "icon": "🟡",
     },
+    "convenience": {
+        "name": "편의점",
+        "keywords": ["편의점", "CU", "GS25", "세븐일레븐", "이마트24", "편의점 신상", "편의점 추천"],
+        "mall_url": "",
+        "icon": "🏪",
+    },
     "coupang": {
         "name": "쿠팡",
         "keywords": ["쿠팡", "coupang", "로켓배송", "쿠팡 추천"],
@@ -165,6 +171,10 @@ TARGET_CHANNELS = {
     "emart24": [
         {"handle": "@편의점고인물", "name": "편의점고인물", "priority": 1},
     ],
+    "convenience": [
+        {"handle": "@편의점고인물", "name": "편의점고인물", "priority": 1},
+        {"handle": "@먹킷", "name": "먹킷리스트", "priority": 2},
+    ],
     "coupang": [
         {"handle": "@먹킷", "name": "먹킷리스트", "priority": 1},
     ],
@@ -203,6 +213,11 @@ SEARCH_KEYWORDS = {
     ],
     "emart24": [
         "이마트24 신상", "이마트24 추천", "이마트24 꿀템",
+    ],
+    "convenience": [
+        "편의점 신상", "편의점 추천", "편의점 꿀템",
+        "CU 신상", "GS25 신상", "세븐일레븐 신상", "이마트24 신상",
+        "편의점 1+1", "편의점 행사",
     ],
     "coupang": [
         "쿠팡 추천", "쿠팡 꿀템", "로켓배송 추천",

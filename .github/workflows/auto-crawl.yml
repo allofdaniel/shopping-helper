@@ -97,7 +97,7 @@ jobs:
 
           pipeline = ImprovedDataPipeline()
 
-          stores = ['daiso', 'costco', 'ikea', 'oliveyoung', 'convenience']
+          stores = ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'convenience']
 
           for i, store in enumerate(stores, 1):
               print(f'\n[{i}/{len(stores)}] {store} 크롤링...')
