@@ -1,13 +1,17 @@
 {
-  "updated_at": "2026-01-29T21:05:46.120352+09:00",
+  "updated_at": "2026-02-05T22:27:38.441626+09:00",
   "total_products": 1189,
-  "total_videos": 1431,
+  "total_videos": 2244,
   "stores": {
     "daiso": 739,
     "costco": 375,
     "oliveyoung": 0,
     "traders": 0,
     "ikea": 75,
-    "convenience": 0
+    "convenience": 0,
+    "cu": 0,
+    "gs25": 0,
+    "seveneleven": 0,
+    "emart24": 0
   }
 }
