@@ -1,8 +1,9 @@
 // Service Worker for 꿀템장바구니 PWA
 // Enhanced version with security, performance, and offline improvements
 
-const BUILD_TIME = '2026-01-24T00:00:00Z';
-const CACHE_VERSION = 'v6-' + BUILD_TIME.replace(/[^0-9]/g, '').slice(0, 12);
+// BUILD_TIME is updated automatically during deployment
+const BUILD_TIME = '2026-02-05T00:00:00Z';
+const CACHE_VERSION = 'v7-' + BUILD_TIME.replace(/[^0-9]/g, '').slice(0, 12);
 const CACHE_NAME = `honeycart-${CACHE_VERSION}`;
 const DATA_CACHE = `honeycart-data-${CACHE_VERSION}`;
 const IMAGE_CACHE = `honeycart-images-v1`; // Version-independent for better hit rates

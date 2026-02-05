@@ -106,7 +106,7 @@ export function SearchBar({
         <button
           onClick={onClear}
           aria-label="검색어 지우기"
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full z-10"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 min-w-[28px] min-h-[28px] hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full z-10 flex items-center justify-center"
         >
           <X className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
         </button>
@@ -114,7 +114,10 @@ export function SearchBar({
 
       {/* 드롭다운 */}
       {showDropdown && hasContent && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 max-h-72 overflow-y-auto">
+        <div
+          role="listbox"
+          aria-label="검색 제안"
+          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 max-h-72 overflow-y-auto">
           {/* 최근 검색어 */}
           {!value && recentSearches.length > 0 && (
             <div className="p-2">

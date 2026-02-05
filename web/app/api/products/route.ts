@@ -28,7 +28,7 @@ interface ApiProduct {
   [key: string]: unknown // allow additional fields from JSON
 }
 
-const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'youtube_products']
+const STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'cu', 'gs25', 'seveneleven', 'emart24', 'youtube_products']
 const VALID_SORTS = ['popular', 'price_low', 'price_high', 'newest', 'rating', 'sales_count', 'review_count']
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 10000  // 전체 상품 반환 (클라이언트에서 필터링)

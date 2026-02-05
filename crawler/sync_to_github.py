@@ -27,7 +27,7 @@ DB_PATH = PROJECT_ROOT / 'data' / 'products.db'
 OUTPUT_DIR = PROJECT_ROOT / 'web' / 'public' / 'data'
 
 # 매장 목록 (API route.ts의 STORES와 일치)
-STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
+STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'cu', 'gs25', 'seveneleven', 'emart24']
 
 # 프론트엔드에 필요한 상품 필드만 추출 (용량 절감)
 PRODUCT_FIELDS = [

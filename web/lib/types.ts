@@ -85,7 +85,7 @@ export interface Stats {
 }
 
 // 매장 표시 순서 (중요도 순) - 실제 데이터 파일과 일치
-const STORE_ORDER = ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'convenience', 'youtube_products'] as const
+const STORE_ORDER = ['daiso', 'costco', 'ikea', 'oliveyoung', 'traders', 'convenience', 'cu', 'gs25', 'seveneleven', 'emart24', 'youtube_products'] as const
 
 // 타입 안전한 StoreKey 타입
 export type StoreKey = typeof STORE_ORDER[number]
@@ -103,6 +103,10 @@ export const STORES: Record<StoreKey, Store> = {
   oliveyoung: { key: 'oliveyoung', name: '올리브영', icon: '💄', color: '#009A3D', count: 0 },
   traders: { key: 'traders', name: '트레이더스', icon: '🏬', color: '#004D9B', count: 0 },
   convenience: { key: 'convenience', name: '편의점', icon: '🏪', color: '#6B2D8A', count: 0 },
+  cu: { key: 'cu', name: 'CU', icon: '🏪', color: '#652D8A', count: 0 },
+  gs25: { key: 'gs25', name: 'GS25', icon: '🏪', color: '#007BC0', count: 0 },
+  seveneleven: { key: 'seveneleven', name: '세븐일레븐', icon: '🏪', color: '#00854A', count: 0 },
+  emart24: { key: 'emart24', name: '이마트24', icon: '🏪', color: '#FFCC00', count: 0 },
   youtube_products: { key: 'youtube_products', name: 'YouTube 추천', icon: '📺', color: '#FF0000', count: 0 },
 }
 

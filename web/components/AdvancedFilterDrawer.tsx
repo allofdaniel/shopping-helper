@@ -117,6 +117,9 @@ export function AdvancedFilterDrawer({
       {/* 드로어 */}
       <div
         ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filter-drawer-title"
         className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-gray-900
                    shadow-2xl z-50 flex flex-col transform transition-transform duration-300
                    animate-slide-in-right"
@@ -124,8 +127,8 @@ export function AdvancedFilterDrawer({
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-3">
-            <SlidersHorizontal className="w-5 h-5 text-orange-500" />
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">상세 필터</h2>
+            <SlidersHorizontal className="w-5 h-5 text-orange-500" aria-hidden="true" />
+            <h2 id="filter-drawer-title" className="text-lg font-bold text-gray-900 dark:text-white">상세 필터</h2>
             {activeFilterCount > 0 && (
               <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400
                              rounded-full text-xs font-medium">
@@ -135,9 +138,10 @@ export function AdvancedFilterDrawer({
           </div>
           <button
             onClick={onClose}
+            aria-label="필터 닫기"
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" aria-hidden="true" />
           </button>
         </div>
 
