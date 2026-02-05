@@ -39,7 +39,12 @@ __pycache__/
 *.pyc
 .env
 data/
+!web/public/data/
 .playwright-mcp/
+
+# Sensitive files (never commit)
+docker/.env
+crawler/.env
 null_price_products.txt
 tools/
 crawler/improved_products.json

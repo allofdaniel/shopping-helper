@@ -5,7 +5,7 @@ import path from 'path'
 export const dynamic = 'force-dynamic'
 
 // 지원하는 매장 목록
-const VALID_STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience']
+const VALID_STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'youtube_products']
 
 // 입력값 제한
 const MAX_LIMIT = 100

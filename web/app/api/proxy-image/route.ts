@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=86400, s-maxage=604800', // 1일 브라우저, 7일 CDN 캐시
-        'Access-Control-Allow-Origin': 'https://web-keprojects.vercel.app',
+        'Access-Control-Allow-Origin': '*',
       },
     })
   } catch (error) {

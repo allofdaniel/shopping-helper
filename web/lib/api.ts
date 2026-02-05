@@ -6,7 +6,7 @@ interface FetchProductsOptions {
   store?: string
   category?: string
   search?: string
-  sort?: 'popular' | 'newest' | 'price_low' | 'price_high'
+  sort?: 'popular' | 'newest' | 'price_low' | 'price_high' | 'rating' | 'sales_count' | 'review_count'
   limit?: number
   offset?: number
 }

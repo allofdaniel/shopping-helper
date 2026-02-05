@@ -262,9 +262,9 @@ class Database:
             query += " AND p.is_approved = 1"
         query += " AND p.is_hidden = 0"
         query += " ORDER BY p.source_view_count DESC"
-        query += f" LIMIT {limit} OFFSET {offset}"
+        query += " LIMIT ? OFFSET ?"
 
-        cursor.execute(query, (store_key,))
+        cursor.execute(query, (store_key, limit, offset))
         return [dict(row) for row in cursor.fetchall()]
 
     def get_pending_products(self, limit: int = 50) -> list:
