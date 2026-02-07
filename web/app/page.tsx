@@ -250,6 +250,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#121212] transition-colors duration-300 font-['Inter',sans-serif]">
+      {/* Skip Link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[9999] focus:bg-orange-500 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg"
+      >
+        본문으로 건너뛰기
+      </a>
+
       {/* Offline Indicator */}
       <OfflineIndicator />
 
@@ -289,12 +297,17 @@ export default function Home() {
         </div>
 
         {/* Category Pills - Stitch style (horizontal scroll) */}
-        <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide pb-2">
+        <div
+          className="flex items-center space-x-2 overflow-x-auto scrollbar-hide pb-2"
+          role="group"
+          aria-label="카테고리 필터"
+        >
           {CATEGORY_KEYS.map((key) => (
             <button
               key={key}
               onClick={() => setSelectedCategory(key)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all
+              aria-pressed={selectedCategory === key}
+              className={`px-4 py-2 min-h-[44px] rounded-full text-sm font-medium whitespace-nowrap transition-all
                          ${selectedCategory === key
                            ? 'bg-[#FF4E00] text-white'
                            : 'bg-white dark:bg-[#1E1E1E] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
@@ -307,7 +320,7 @@ export default function Home() {
       </header>
 
       {/* Main Content - Stitch style */}
-      <main className="px-4">
+      <main id="main-content" className="px-4">
         {/* Results summary - Stitch style */}
         <div className="flex justify-between items-center py-3">
           <div className="flex items-center gap-1">

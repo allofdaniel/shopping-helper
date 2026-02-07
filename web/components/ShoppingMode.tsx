@@ -59,6 +59,14 @@ export function ShoppingMode({
   const [expandedStore, setExpandedStore] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [searchInStore, setSearchInStore] = useState<string>('')
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+    }
+  }, [])
 
   // 찜한 상품만 필터링 후 매장별 그룹화
   const groupedByStore = useMemo(() => {
@@ -98,7 +106,8 @@ export function ShoppingMode({
     try {
       await navigator.clipboard.writeText(code)
       setCopiedId(product.id)
-      setTimeout(() => setCopiedId(null), 2000)
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+      copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000)
     } catch (err) {
       console.error('Failed to copy:', err)
     }

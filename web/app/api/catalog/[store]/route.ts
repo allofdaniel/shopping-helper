@@ -4,6 +4,16 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
+// Product type for API responses
+interface CatalogProduct {
+  id?: number
+  name?: string
+  brand?: string
+  category?: string
+  price?: number
+  [key: string]: unknown
+}
+
 // 지원하는 매장 목록
 const VALID_STORES = ['daiso', 'costco', 'oliveyoung', 'traders', 'ikea', 'convenience', 'cu', 'gs25', 'seveneleven', 'emart24', 'youtube_products']
 
@@ -43,7 +53,7 @@ function validateAndSanitizeParams(searchParams: URLSearchParams) {
 }
 
 // JSON 데이터 캐시
-const dataCache: Record<string, { products: any[]; total: number; loadedAt: number }> = {}
+const dataCache: Record<string, { products: CatalogProduct[]; total: number; loadedAt: number }> = {}
 const CACHE_TTL = 5 * 60 * 1000 // 5분
 
 async function loadStoreData(store: string) {
@@ -109,14 +119,14 @@ export async function GET(
     let filtered = storeData.products
 
     if (search) {
-      filtered = filtered.filter((p: any) =>
+      filtered = filtered.filter((p: CatalogProduct) =>
         p.name?.toLowerCase().includes(search) ||
         p.brand?.toLowerCase().includes(search)
       )
     }
 
     if (category) {
-      filtered = filtered.filter((p: any) =>
+      filtered = filtered.filter((p: CatalogProduct) =>
         p.category?.toLowerCase().includes(category.toLowerCase())
       )
     }

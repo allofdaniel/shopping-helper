@@ -4,7 +4,7 @@ import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin,
 import type { Product, StoreLocation } from '@/lib/types'
 import { STORES } from '@/lib/types'
 import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl, validateExternalUrl } from '@/lib/api'
-import { useState, useCallback, memo, useEffect } from 'react'
+import { useState, useCallback, memo, useEffect, useRef, useMemo } from 'react'
 
 interface ProductCardProps {
   product: Product
@@ -46,6 +46,14 @@ export const ProductCard = memo(function ProductCard({
   const [showDetail, setShowDetail] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+    }
+  }, [])
 
   // 이미지 URL: image_url (카탈로그) 또는 official_image_url (공식) 사용
   // 다이소 등 핫링크 보호가 있는 사이트는 로컬 이미지 사용
@@ -65,8 +73,8 @@ export const ProductCard = memo(function ProductCard({
 
   const timestampDisplay = formatTimestamp(product.timestamp_sec, product.timestamp_text)
 
-  // 매장 정보 파싱
-  const parseStoreLocations = (): StoreLocation[] => {
+  // 매장 정보 파싱 (memoized)
+  const storeLocations = useMemo((): StoreLocation[] => {
     if (!product.store_locations) return []
     if (typeof product.store_locations === 'string') {
       try {
@@ -76,9 +84,7 @@ export const ProductCard = memo(function ProductCard({
       }
     }
     return product.store_locations
-  }
-
-  const storeLocations = parseStoreLocations()
+  }, [product.store_locations])
 
   // 상품코드 복사
   const handleCopyCode = useCallback(async (e: React.MouseEvent) => {
@@ -88,7 +94,8 @@ export const ProductCard = memo(function ProductCard({
       try {
         await navigator.clipboard.writeText(code)
         setCopiedCode(true)
-        setTimeout(() => setCopiedCode(false), 2000)
+        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+        copyTimeoutRef.current = setTimeout(() => setCopiedCode(false), 2000)
       } catch (err) {
         console.error('Failed to copy:', err)
       }

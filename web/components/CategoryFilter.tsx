@@ -15,7 +15,7 @@ export function CategoryFilter({ selectedCategory, onSelectCategory, counts = {}
   ]
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2" role="group" aria-label="카테고리 필터">
       {categories.map((category) => {
         const isSelected = selectedCategory === category.key
         const count = category.key === 'all'
@@ -26,8 +26,9 @@ export function CategoryFilter({ selectedCategory, onSelectCategory, counts = {}
           <button
             key={category.key}
             onClick={() => onSelectCategory(category.key)}
+            aria-pressed={isSelected}
             className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
+              flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg text-sm
               transition-all duration-200
               ${isSelected
                 ? 'bg-blue-500 text-white shadow-sm'

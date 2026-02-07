@@ -15,7 +15,7 @@ export function StoreFilter({ selectedStore, onSelectStore, counts = {} }: Store
   ]
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2" role="group" aria-label="매장 필터">
       {stores.map((store) => {
         const isSelected = selectedStore === store.key
         const count = store.key === 'all'
@@ -26,8 +26,9 @@ export function StoreFilter({ selectedStore, onSelectStore, counts = {} }: Store
           <button
             key={store.key}
             onClick={() => onSelectStore(store.key)}
+            aria-pressed={isSelected}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
+              flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-full text-sm font-medium
               transition-all duration-200
               ${isSelected
                 ? 'text-white shadow-md scale-105'

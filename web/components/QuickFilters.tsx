@@ -76,11 +76,12 @@ export function QuickFilters({
   }
 
   return (
-    <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
+    <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide" role="group" aria-label="빠른 필터">
       {QUICK_FILTER_KEYS.map((key) => (
         <button
           key={key}
           onClick={() => handleFilterClick(key)}
+          aria-pressed={key === 'favorites' ? showWishlistOnly : sortBy === key}
           className={`min-h-[44px] px-4 py-2.5 rounded-full text-xs font-medium whitespace-nowrap
                      transition-all duration-150 flex items-center gap-1
                      focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
@@ -100,6 +101,8 @@ export function QuickFilters({
       {compareCount > 0 && (
         <button
           onClick={() => setShowComparePanel(!showComparePanel)}
+          aria-pressed={showComparePanel}
+          aria-label={`상품 비교 (${compareCount}개)`}
           className={`min-h-[44px] px-4 py-2.5 rounded-full text-xs font-medium whitespace-nowrap
                      transition-all duration-150 flex items-center gap-1.5
                      focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2

@@ -4,11 +4,22 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-async function loadSummary() {
+// Store summary type
+interface StoreSummary {
+  total?: number
+  [key: string]: unknown
+}
+
+interface Summary {
+  stores?: Record<string, StoreSummary>
+  total_products?: number
+}
+
+async function loadSummary(): Promise<Summary | null> {
   try {
     const summaryPath = path.join(process.cwd(), 'public', 'data', 'summary.json')
     const content = await fs.readFile(summaryPath, 'utf-8')
-    return JSON.parse(content)
+    return JSON.parse(content) as Summary
   } catch {
     return null
   }
@@ -28,7 +39,7 @@ export async function GET() {
 
     const catalogCounts: Record<string, number> = {}
     for (const [key, store] of Object.entries(summary.stores || {})) {
-      catalogCounts[key] = (store as any).total || 0
+      catalogCounts[key] = store.total || 0
     }
 
     return NextResponse.json({

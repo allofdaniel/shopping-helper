@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(true)
   const [wasOffline, setWasOffline] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     // Initial check
@@ -14,7 +15,8 @@ export function useOnlineStatus() {
       setIsOnline(true)
       // Show "back online" message briefly when coming back online
       setWasOffline(true)
-      setTimeout(() => setWasOffline(false), 3000)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => setWasOffline(false), 3000)
     }
 
     const handleOffline = () => {
@@ -26,6 +28,7 @@ export function useOnlineStatus() {
     window.addEventListener('offline', handleOffline)
 
     return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }

@@ -5,7 +5,7 @@ import { Providers } from './providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
-const SITE_URL = 'https://web-keprojects.vercel.app'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://web-keprojects.vercel.app'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -66,7 +66,7 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   verification: {
-    google: 'google-site-verification-code', // TODO: 실제 코드로 교체
+    google: process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION || '',
   },
   alternates: {
     canonical: SITE_URL,

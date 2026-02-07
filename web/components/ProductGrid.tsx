@@ -48,7 +48,7 @@ interface ProductGridProps {
 }
 
 // Stitch-style 스켈레톤 UI
-function ProductSkeleton() {
+const ProductSkeleton = memo(function ProductSkeleton() {
   return (
     <div className="flex flex-col gap-1.5">
       {/* 이미지 영역 - aspect-[4/5] */}
@@ -83,7 +83,7 @@ function ProductSkeleton() {
       `}</style>
     </div>
   )
-}
+})
 
 // API 에러 표시
 function ApiErrorDisplay({
@@ -205,7 +205,7 @@ function EmptyState({
 }
 
 // 목록 뷰용 간소화된 아이템
-function ProductListItem({
+const ProductListItem = memo(function ProductListItem({
   product,
   isInWishlist,
   onToggleWishlist,
@@ -291,7 +291,7 @@ function ProductListItem({
       </button>
     </div>
   )
-}
+})
 
 export const ProductGrid = memo(function ProductGrid({
   products,
