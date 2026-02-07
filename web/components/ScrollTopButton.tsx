@@ -27,11 +27,12 @@ export function ScrollTopButton({ threshold = 500 }: ScrollTopButtonProps) {
   return (
     <button
       onClick={scrollToTop}
+      aria-label="페이지 상단으로 이동"
       className="fixed bottom-20 left-4 z-40 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg
                border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700
                transition-all duration-300 animate-fade-in"
     >
-      <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+      <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" aria-hidden="true" />
     </button>
   )
 }

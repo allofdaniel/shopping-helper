@@ -188,13 +188,16 @@ export function BarcodeScanner({ isOpen, onClose, onScan }: BarcodeScannerProps)
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="barcode-scanner-title"
       className="fixed inset-0 z-[9999] bg-black flex flex-col"
       onClick={onClose}
     >
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent">
-        <h2 className="text-white font-bold text-lg flex items-center gap-2">
-          <Camera className="w-5 h-5" />
+        <h2 id="barcode-scanner-title" className="text-white font-bold text-lg flex items-center gap-2">
+          <Camera className="w-5 h-5" aria-hidden="true" />
           바코드 스캔
         </h2>
         <button
@@ -202,9 +205,10 @@ export function BarcodeScanner({ isOpen, onClose, onScan }: BarcodeScannerProps)
             e.stopPropagation()
             onClose()
           }}
+          aria-label="바코드 스캐너 닫기"
           className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
         >
-          <X className="w-5 h-5 text-white" />
+          <X className="w-5 h-5 text-white" aria-hidden="true" />
         </button>
       </div>
 

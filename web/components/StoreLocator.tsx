@@ -153,6 +153,9 @@ export function StoreLocator({ isOpen, onClose, filterStore }: StoreLocatorProps
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="store-locator-title"
         className="bg-white dark:bg-gray-900 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-hidden"
         onClick={e => e.stopPropagation()}
         style={{ animation: 'slideUp 0.25s ease-out' }}
@@ -160,14 +163,15 @@ export function StoreLocator({ isOpen, onClose, filterStore }: StoreLocatorProps
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-4 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-green-500" />
-            <h2 className="font-bold text-lg text-gray-900 dark:text-white">주변 매장 찾기</h2>
+            <MapPin className="w-5 h-5 text-green-500" aria-hidden="true" />
+            <h2 id="store-locator-title" className="font-bold text-lg text-gray-900 dark:text-white">주변 매장 찾기</h2>
           </div>
           <button
             onClick={onClose}
+            aria-label="매장 찾기 닫기"
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" aria-hidden="true" />
           </button>
         </div>
 

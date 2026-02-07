@@ -18,7 +18,7 @@ GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
 # === AWS S3 Settings ===
 AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_DEFAULT_REGION: str = os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+AWS_DEFAULT_REGION: str = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-2")
 S3_BUCKET: str = os.getenv("S3_BUCKET", "notam-korea-data")
 
 # === Database ===

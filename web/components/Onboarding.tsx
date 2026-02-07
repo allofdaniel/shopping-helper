@@ -70,6 +70,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
         className={`bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl
                    transition-all duration-300 ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
       >
@@ -77,10 +80,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         <div className="flex justify-end p-3">
           <button
             onClick={handleSkip}
+            aria-label="온보딩 건너뛰기"
             className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-1"
           >
             건너뛰기
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
 
@@ -93,7 +97,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </div>
 
           {/* Title */}
-          <h2 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-3">
+          <h2 id="onboarding-title" className="text-xl font-bold text-center text-gray-900 dark:text-white mb-3">
             {step.title}
           </h2>
 

@@ -30,14 +30,15 @@ export function Header({ onSearch, onRefresh, isLoading }: HeaderProps) {
           </div>
 
           {/* 검색 */}
-          <form onSubmit={handleSearch} className="flex-1 max-w-md">
+          <form onSubmit={handleSearch} className="flex-1 max-w-md" role="search">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="상품 검색..."
+                aria-label="상품 검색"
                 className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
@@ -48,17 +49,19 @@ export function Header({ onSearch, onRefresh, isLoading }: HeaderProps) {
             <button
               onClick={onRefresh}
               disabled={isLoading}
+              aria-label="새로고침"
               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
             <a
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="GitHub 저장소"
               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <Github className="w-5 h-5" />
+              <Github className="w-5 h-5" aria-hidden="true" />
             </a>
           </div>
         </div>
