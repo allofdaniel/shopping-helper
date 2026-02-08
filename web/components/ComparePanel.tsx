@@ -53,16 +53,24 @@ export function ComparePanel({
   const lowestPrice = getLowestPrice()
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-2xl
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-2xl
                     border-t border-gray-200 dark:border-gray-800 transform transition-transform duration-300"
-         style={{ transform: isExpanded ? 'translateY(0)' : 'translateY(calc(100% - 56px))' }}>
+      style={{ transform: isExpanded ? 'translateY(0)' : 'translateY(calc(100% - 56px))' }}
+      role="region"
+      aria-label="상품 비교 패널"
+      aria-hidden={!isOpen}
+    >
 
       {/* 핸들 바 */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-label={isExpanded ? '비교 패널 접기' : '비교 패널 펼치기'}
+        aria-expanded={isExpanded}
         className="absolute -top-10 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-900
                    px-4 py-2 rounded-t-xl shadow-lg border border-b-0 border-gray-200 dark:border-gray-800
-                   flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                   flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors
+                   focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
       >
         <Scale className="w-4 h-4 text-orange-500" />
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -93,31 +101,35 @@ export function ComparePanel({
         <div className="flex items-center gap-2">
           <button
             onClick={onClear}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors
-                     text-gray-400 hover:text-red-500"
-            title="전체 삭제"
+            className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center
+                     hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors
+                     text-gray-400 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400"
+            aria-label="비교 목록 전체 삭제"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center
+                     hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors
+                     focus:outline-none focus:ring-2 focus:ring-gray-400"
+            aria-label="비교 패널 닫기"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-5 h-5 text-gray-400" aria-hidden="true" />
           </button>
         </div>
       </div>
 
       {/* 비교 테이블 */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px]">
+      <div className="overflow-x-auto" role="region" aria-label="상품 비교 테이블">
+        <table className="w-full min-w-[640px]" role="table">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-800/50">
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-24">
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-24">
                 항목
               </th>
               {compareData?.products.map((product) => (
-                <th key={product.id} className="px-3 py-3 text-center min-w-[140px]">
+                <th scope="col" key={product.id} className="px-3 py-3 text-center min-w-[140px]">
                   <div className="relative group">
                     {/* 상품 이미지 */}
                     <div className="relative w-20 h-20 mx-auto mb-2 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
@@ -128,17 +140,20 @@ export function ComparePanel({
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-2xl">
+                        <div className="w-full h-full flex items-center justify-center text-2xl" aria-label="상품 이미지 없음">
                           📦
                         </div>
                       )}
-                      {/* 삭제 버튼 */}
+                      {/* 삭제 버튼 - 44x44px 터치 타겟 */}
                       <button
                         onClick={() => onRemove(product.id)}
-                        className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full
-                                 opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                        className="absolute -top-2 -right-2 p-2.5 min-w-[44px] min-h-[44px]
+                                 flex items-center justify-center bg-red-500 text-white rounded-full
+                                 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-md
+                                 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
+                        aria-label={`${product.official_name || product.name} 비교에서 제거`}
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </div>
                     {/* 상품명 */}
@@ -150,12 +165,12 @@ export function ComparePanel({
               ))}
               {/* 빈 슬롯 */}
               {[...Array(maxItems - compareIds.length)].map((_, i) => (
-                <th key={`empty-${i}`} className="px-3 py-3 text-center min-w-[140px]">
+                <th scope="col" key={`empty-${i}`} className="px-3 py-3 text-center min-w-[140px]">
                   <div className="w-20 h-20 mx-auto mb-2 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700
-                                flex items-center justify-center">
+                                flex items-center justify-center" aria-hidden="true">
                     <Plus className="w-6 h-6 text-gray-300 dark:text-gray-600" />
                   </div>
-                  <p className="text-xs text-gray-400">상품 추가</p>
+                  <p className="text-xs text-gray-400">빈 슬롯 {i + 1}</p>
                 </th>
               ))}
             </tr>
@@ -163,9 +178,9 @@ export function ComparePanel({
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {/* 가격 */}
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-              <td className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">
-                💰 가격
-              </td>
+              <th scope="row" className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-left">
+                <span aria-hidden="true">💰</span> 가격
+              </th>
               {compareData?.products.map((product) => {
                 const price = product.official_price || product.price
                 const isLowest = price === lowestPrice && lowestPrice !== null
@@ -185,9 +200,9 @@ export function ComparePanel({
 
             {/* 매장 */}
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-              <td className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">
-                🏪 매장
-              </td>
+              <th scope="row" className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-left">
+                <span aria-hidden="true">🏪</span> 매장
+              </th>
               {compareData?.products.map((product) => {
                 const store = STORES[product.store_key]
                 return (
@@ -208,9 +223,9 @@ export function ComparePanel({
 
             {/* 카테고리 */}
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-              <td className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">
-                🏷️ 카테고리
-              </td>
+              <th scope="row" className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-left">
+                <span aria-hidden="true">🏷️</span> 카테고리
+              </th>
               {compareData?.products.map((product) => (
                 <td key={product.id} className="px-3 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
                   {product.category || '-'}
@@ -223,9 +238,9 @@ export function ComparePanel({
 
             {/* 조회수 */}
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-              <td className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">
-                👀 조회수
-              </td>
+              <th scope="row" className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-left">
+                <span aria-hidden="true">👀</span> 조회수
+              </th>
               {compareData?.products.map((product) => {
                 const views = product.source_view_count || 0
                 return (
@@ -241,9 +256,9 @@ export function ComparePanel({
 
             {/* 추천 채널 */}
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-              <td className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">
-                📺 채널
-              </td>
+              <th scope="row" className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-left">
+                <span aria-hidden="true">📺</span> 채널
+              </th>
               {compareData?.products.map((product) => (
                 <td key={product.id} className="px-3 py-3 text-center text-xs text-gray-600 dark:text-gray-400 max-w-[120px] truncate">
                   {product.channel_title || '-'}
@@ -256,9 +271,9 @@ export function ComparePanel({
 
             {/* 구매 링크 */}
             <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-              <td className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">
-                🔗 구매
-              </td>
+              <th scope="row" className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-left">
+                <span aria-hidden="true">🔗</span> 구매
+              </th>
               {compareData?.products.map((product) => (
                 <td key={product.id} className="px-3 py-3 text-center">
                   {product.official_product_url ? (
@@ -303,14 +318,18 @@ export function CompareFab({
   return (
     <button
       onClick={onClick}
+      aria-label={`상품 비교 패널 ${isActive ? '닫기' : '열기'} (${count}개 선택됨)`}
+      aria-pressed={isActive}
       className={`fixed bottom-20 right-4 z-40 flex items-center gap-2 px-4 py-3 rounded-full
-                 shadow-lg transition-all duration-300 ${
+                 shadow-lg transition-all duration-300
+                 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2
+                 min-h-[48px] ${
                    isActive
                      ? 'bg-orange-500 text-white shadow-orange-500/40'
                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
                  }`}
     >
-      <Scale className="w-5 h-5" />
+      <Scale className="w-5 h-5" aria-hidden="true" />
       <span className="font-medium text-sm">비교 {count}개</span>
     </button>
   )

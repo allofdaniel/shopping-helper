@@ -1,6 +1,7 @@
 'use client'
 
 import { Play, ShoppingCart, Clock, MessageCircle, Eye, X, ChevronRight, MapPin, Phone, Copy, Check, Tag, ExternalLink, Youtube, Star, Calendar, Package, Heart, Scale, Share2, Plus } from 'lucide-react'
+import Image from 'next/image'
 import type { Product, StoreLocation } from '@/lib/types'
 import { STORES } from '@/lib/types'
 import { formatPrice, getYoutubeVideoUrl, getYoutubeThumbnail, formatViewCount, getProxiedImageUrl, validateExternalUrl } from '@/lib/api'
@@ -17,6 +18,7 @@ interface ProductCardProps {
   onShare?: () => void
   compact?: boolean  // 작은 아이콘 뷰
   onAddToCart?: (productId: number) => void
+  priority?: boolean  // LCP 최적화: above-the-fold 이미지에 priority 부여
 }
 
 // Stitch-inspired modern card design
@@ -33,6 +35,7 @@ export const ProductCard = memo(function ProductCard({
   onShare,
   compact = false,
   onAddToCart,
+  priority = false,
 }: ProductCardProps) {
   const store = STORES[product.store_key]
   const hasOfficialInfo = product.official_product_url
@@ -175,7 +178,7 @@ export const ProductCard = memo(function ProductCard({
               {!imgLoaded && (
                 <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
               )}
-              <img
+              <Image
                 src={imageUrl}
                 alt={product.name}
                 width={300}
@@ -185,20 +188,22 @@ export const ProductCard = memo(function ProductCard({
                 }`}
                 onError={() => setImgError(true)}
                 onLoad={() => setImgLoaded(true)}
-                loading="lazy"
-                decoding="async"
+                loading={priority ? 'eager' : 'lazy'}
+                priority={priority}
+                sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 20vw"
               />
             </>
           ) : safeVideoId ? (
             <div className="relative w-full h-full">
-              <img
+              <Image
                 src={getYoutubeThumbnail(safeVideoId)}
                 alt={product.name}
                 width={480}
                 height={600}
                 className="w-full h-full object-cover"
-                loading="lazy"
-                decoding="async"
+                loading={priority ? 'eager' : 'lazy'}
+                priority={priority}
+                sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 20vw"
               />
               {/* Video play overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent flex flex-col justify-end p-2">

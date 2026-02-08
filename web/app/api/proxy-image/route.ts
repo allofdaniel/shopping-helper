@@ -11,6 +11,21 @@ const ALLOWED_DOMAINS = [
   'image.daisomall.co.kr',
 ]
 
+// 허용된 Origin 목록 (CORS)
+const ALLOWED_ORIGINS = [
+  'https://web-keprojects.vercel.app',
+  'https://kkultip.vercel.app',
+  'http://localhost:3000',
+]
+
+function getAllowedOrigin(request: NextRequest): string {
+  const origin = request.headers.get('origin')
+  if (origin && ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed.replace(/:\d+$/, '')))) {
+    return origin
+  }
+  return ALLOWED_ORIGINS[0] // Default to primary domain
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -96,7 +111,8 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=86400, s-maxage=604800', // 1일 브라우저, 7일 CDN 캐시
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': getAllowedOrigin(request),
+        'Vary': 'Origin',
       },
     })
   } catch (error) {

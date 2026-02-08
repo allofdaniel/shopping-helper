@@ -378,7 +378,7 @@ export const ProductGrid = memo(function ProductGrid({
   return (
     <>
       <div className={gridClass}>
-        {displayedItems.map((product: Product) => (
+        {displayedItems.map((product: Product, index: number) => (
           viewMode === 'list' ? (
             <ProductListItem
               key={product.id}
@@ -398,6 +398,7 @@ export const ProductGrid = memo(function ProductGrid({
               maxCompare={maxCompare}
               onShare={() => onShare(product)}
               compact={viewMode === 'small'}
+              priority={index < 6}
             />
           )
         ))}

@@ -29,6 +29,9 @@ export function useInfiniteScroll<T>({
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loaderNodeRef = useRef<HTMLDivElement | null>(null)
 
+  // Stable refs for callback values - prevents observer recreation
+  const stateRef = useRef({ hasMore: false, isLoadingMore: false, itemsLength: 0, pageSize })
+
   // Reset when items change
   useEffect(() => {
     setDisplayCount(pageSize)
@@ -37,36 +40,41 @@ export function useInfiniteScroll<T>({
   const displayedItems = items.slice(0, displayCount)
   const hasMore = displayCount < items.length
 
+  // Update refs with latest values (no re-render trigger)
+  stateRef.current = { hasMore, isLoadingMore, itemsLength: items.length, pageSize }
+
   const loadMore = useCallback(() => {
-    if (!hasMore || isLoadingMore) return
+    const { hasMore: canLoad, isLoadingMore: loading, itemsLength, pageSize: size } = stateRef.current
+    if (!canLoad || loading) return
 
     setIsLoadingMore(true)
     // Simulate a slight delay for smoother UX
     requestAnimationFrame(() => {
-      setDisplayCount(prev => Math.min(prev + pageSize, items.length))
+      setDisplayCount(prev => Math.min(prev + size, itemsLength))
       setIsLoadingMore(false)
     })
-  }, [hasMore, isLoadingMore, pageSize, items.length])
+  }, []) // Empty deps - uses stateRef for latest values
 
   const reset = useCallback(() => {
-    setDisplayCount(pageSize)
-  }, [pageSize])
+    setDisplayCount(stateRef.current.pageSize)
+  }, [])
 
-  // Intersection Observer callback
+  // Stable Intersection Observer callback - never changes
   const handleIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
-    if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+    const { hasMore: canLoad, isLoadingMore: loading } = stateRef.current
+    if (entries[0]?.isIntersecting && canLoad && !loading) {
       loadMore()
     }
-  }, [hasMore, isLoadingMore, loadMore])
+  }, [loadMore]) // loadMore is now stable
 
-  // Create/update observer when dependencies change
+  // Create observer only when threshold/rootMargin change (should be rare)
   useEffect(() => {
     // Cleanup previous observer
     if (observerRef.current) {
       observerRef.current.disconnect()
     }
 
-    // Create new observer
+    // Create new observer with stable callback
     observerRef.current = new IntersectionObserver(handleIntersect, {
       threshold,
       rootMargin,
@@ -84,7 +92,7 @@ export function useInfiniteScroll<T>({
     }
   }, [handleIntersect, threshold, rootMargin])
 
-  // Callback ref for the loader element
+  // Stable callback ref for the loader element
   const loaderRef = useCallback((node: HTMLDivElement | null) => {
     loaderNodeRef.current = node
 

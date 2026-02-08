@@ -190,32 +190,56 @@ export default function Home() {
 
     // Video diversity: prevent consecutive products from same video
     // Only for sort modes where clustering is likely (popular, new, recommended)
+    // Optimized O(n) algorithm using Set instead of O(n²) splice
     if (['popular', 'new', 'recommended'].includes(sortBy) && result.length > 3) {
       const diversified: Product[] = []
-      const remaining = [...result]
-      const MAX_CONSECUTIVE = 2 // max same-video products in a row
+      const used = new Set<number>() // Track used indices instead of splice
+      const MAX_CONSECUTIVE = 2
+      let searchStart = 0 // Optimization: skip already-used items at start
 
-      while (remaining.length > 0) {
-        // Count how many recent items share the same video_id
-        let recentVideoCount = 0
+      while (diversified.length < result.length) {
+        // Count consecutive same-video items at end
+        let consecutiveCount = 0
         const lastVideoId = diversified.length > 0 ? diversified[diversified.length - 1]?.video_id : null
         if (lastVideoId) {
-          for (let j = diversified.length - 1; j >= 0 && j >= diversified.length - MAX_CONSECUTIVE; j--) {
-            if (diversified[j]?.video_id === lastVideoId) recentVideoCount++
+          for (let j = diversified.length - 1; j >= Math.max(0, diversified.length - MAX_CONSECUTIVE); j--) {
+            if (diversified[j]?.video_id === lastVideoId) consecutiveCount++
             else break
           }
         }
 
-        // Find next product: prefer different video_id if we hit the limit
-        let picked = 0
-        if (recentVideoCount >= MAX_CONSECUTIVE && lastVideoId) {
-          const diffIdx = remaining.findIndex(p => p.video_id !== lastVideoId)
-          if (diffIdx !== -1) picked = diffIdx
-          // If all remaining are same video, just take the next one
+        const needDifferentVideo = consecutiveCount >= MAX_CONSECUTIVE && lastVideoId
+
+        // Update searchStart to skip used items at beginning
+        while (searchStart < result.length && used.has(searchStart)) {
+          searchStart++
         }
 
-        diversified.push(remaining[picked])
-        remaining.splice(picked, 1)
+        // Find next item: prefer different video if needed
+        let picked = -1
+        for (let i = searchStart; i < result.length; i++) {
+          if (used.has(i)) continue
+          if (needDifferentVideo && result[i].video_id === lastVideoId) continue
+          picked = i
+          break
+        }
+
+        // Fallback: if we couldn't find different video, just pick first unused
+        if (picked === -1) {
+          for (let i = searchStart; i < result.length; i++) {
+            if (!used.has(i)) {
+              picked = i
+              break
+            }
+          }
+        }
+
+        if (picked !== -1) {
+          diversified.push(result[picked])
+          used.add(picked)
+        } else {
+          break // Safety: shouldn't happen
+        }
       }
       result = diversified
     }
