@@ -311,7 +311,7 @@ export const ProductCard = memo(function ProductCard({
                 >
                   {store?.icon} {store?.name}
                 </span>
-                <h2 className="font-bold text-base text-gray-900 dark:text-white">상품 상세</h2>
+                <h2 id={`product-detail-${product.id}`} className="font-bold text-base text-gray-900 dark:text-white">상품 상세</h2>
               </div>
               <div className="flex items-center gap-1">
                 {/* 공유 버튼 */}
@@ -374,10 +374,12 @@ export const ProductCard = memo(function ProductCard({
                 />
               ) : imageUrl ? (
                 <div className="relative w-full h-full">
-                  <img
+                  <Image
                     src={imageUrl}
                     alt={product.name}
-                    className="w-full h-full object-contain"
+                    fill
+                    className="object-contain"
+                    sizes="(max-width: 640px) 100vw, 512px"
                   />
                   {/* 영상 재생 버튼 오버레이 - video_id 있을 때만 */}
                   {safeVideoId && (
@@ -395,10 +397,12 @@ export const ProductCard = memo(function ProductCard({
                   className="relative w-full h-full cursor-pointer"
                   onClick={() => setShowVideo(true)}
                 >
-                  <img
+                  <Image
                     src={getYoutubeThumbnail(safeVideoId)}
                     alt={product.name}
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, 512px"
                   />
                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center hover:bg-black/40 transition-colors">
                     <div className="bg-red-600 rounded-full p-4">

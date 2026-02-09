@@ -377,7 +377,7 @@ export const ProductGrid = memo(function ProductGrid({
   // 상품 그리드 + 무한 스크롤
   return (
     <>
-      <div className={gridClass}>
+      <div className={gridClass} role="list" aria-label="상품 목록">
         {displayedItems.map((product: Product, index: number) => (
           viewMode === 'list' ? (
             <ProductListItem
