@@ -2,7 +2,7 @@
 // Enhanced version with security, performance, and offline improvements
 
 // BUILD_TIME is updated automatically during deployment
-const BUILD_TIME = '2026-02-08T01:20:40.318Z';
+const BUILD_TIME = '2026-02-10T02:02:10.616Z';
 const CACHE_VERSION = 'v7-' + BUILD_TIME.replace(/[^0-9]/g, '').slice(0, 12);
 const CACHE_NAME = `honeycart-${CACHE_VERSION}`;
 const DATA_CACHE = `honeycart-data-${CACHE_VERSION}`;

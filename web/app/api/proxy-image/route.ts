@@ -53,6 +53,14 @@ export async function GET(request: NextRequest) {
     }
 
     // 프로토콜 검증 (SSRF 방지)
+    if (parsedUrl.username || parsedUrl.password) {
+      return new NextResponse('URL credentials are not allowed', { status: 400 })
+    }
+
+    if (parsedUrl.port && parsedUrl.port !== '443') {
+      return new NextResponse('Only HTTPS default port is allowed', { status: 400 })
+    }
+
     if (parsedUrl.protocol !== 'https:') {
       return new NextResponse('Only HTTPS allowed', { status: 403 })
     }
@@ -66,20 +74,9 @@ export async function GET(request: NextRequest) {
       response = await fetch(imageUrl, {
         method: 'GET',
         headers: {
-          'Host': hostname,
-          'Referer': 'https://www.daisomall.co.kr/',
-          'Origin': 'https://www.daisomall.co.kr',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
-          'Sec-Fetch-Dest': 'image',
-          'Sec-Fetch-Mode': 'no-cors',
-          'Sec-Fetch-Site': 'same-origin',
-          'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-          'Sec-Ch-Ua-Mobile': '?0',
-          'Sec-Ch-Ua-Platform': '"Windows"',
         },
         redirect: 'follow',
         signal: controller.signal,

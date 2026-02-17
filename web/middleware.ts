@@ -1,22 +1,73 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-// Simple in-memory rate limiter for Edge Runtime
+// Simple in-memory rate limiter for Middleware runtime
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
 const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 60 // 60 requests per minute per IP
+const RATE_LIMIT_MAX_REQUESTS = 60 // /api default
+const PROXY_IMAGE_MAX_REQUESTS = 30 // /api/proxy-image tighter limit
 
-function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
-  return ip
+function sanitizeIp(rawIp: string | null): string | null {
+  if (!rawIp) return null
+
+  let value = rawIp.trim()
+  if (!value) return null
+
+  // Handle bracketed IPv6 with port: [::1]:3000
+  if (value.startsWith('[')) {
+    const match = value.match(/^\[([^\]]+)\](?::\d+)?$/)
+    value = match ? match[1] : value
+  } else if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(value)) {
+    // IPv4 with port
+    value = value.replace(/:\d+$/, '')
+  }
+
+  // Remove whitespace and allow only safe IP-like values to reduce spoofing attempts
+  value = value.split(',')[0]?.trim() ?? ''
+  if (!/^[0-9a-fA-F:.\-_%]+$/.test(value)) return null
+
+  return value
 }
 
-function isRateLimited(key: string): { limited: boolean; remaining: number } {
+function extractClientIp(request: NextRequest): string {
+  const candidates = [
+    request.headers.get('cf-connecting-ip'),
+    request.headers.get('x-real-ip'),
+    request.headers.get('x-client-ip'),
+    request.headers.get('x-forwarded-for'),
+    request.headers.get('forwarded'),
+  ]
+
+  for (const candidate of candidates) {
+    if (!candidate) continue
+
+    if (candidate.toLowerCase().startsWith('for=')) {
+      const match = candidate.match(/for=([^;,]+)/i)
+      const parsed = match ? sanitizeIp(match[1].replace(/"/g, '')) : sanitizeIp(candidate)
+      if (parsed) return parsed
+    }
+
+    const parsed = sanitizeIp(candidate)
+    if (parsed) return parsed
+  }
+
+  return 'unknown'
+}
+
+function getRateLimitConfig(pathname: string): { max: number } {
+  if (pathname.startsWith('/api/proxy-image')) {
+    return { max: PROXY_IMAGE_MAX_REQUESTS }
+  }
+  if (pathname.startsWith('/api/')) {
+    return { max: RATE_LIMIT_MAX_REQUESTS }
+  }
+  return { max: 0 }
+}
+
+function isRateLimited(key: string, maxRequests: number): { limited: boolean; remaining: number; retryAfter: number } {
   const now = Date.now()
   const record = rateLimitMap.get(key)
 
-  // Clean up old entries periodically
+  // Cleanup stale entries when map grows
   if (rateLimitMap.size > 10000) {
     rateLimitMap.forEach((v, k) => {
       if (v.resetTime < now) rateLimitMap.delete(k)
@@ -25,24 +76,29 @@ function isRateLimited(key: string): { limited: boolean; remaining: number } {
 
   if (!record || record.resetTime < now) {
     rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW })
-    return { limited: false, remaining: RATE_LIMIT_MAX_REQUESTS - 1 }
+    return { limited: false, remaining: maxRequests - 1, retryAfter: RATE_LIMIT_WINDOW / 1000 }
   }
 
-  record.count++
-  if (record.count > RATE_LIMIT_MAX_REQUESTS) {
-    return { limited: true, remaining: 0 }
+  record.count += 1
+  if (record.count > maxRequests) {
+    return {
+      limited: true,
+      remaining: 0,
+      retryAfter: Math.max(1, Math.ceil((record.resetTime - now) / 1000)),
+    }
   }
 
-  return { limited: false, remaining: RATE_LIMIT_MAX_REQUESTS - record.count }
+  return { limited: false, remaining: maxRequests - record.count, retryAfter: Math.ceil((record.resetTime - now) / 1000) }
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const response = NextResponse.next()
+  const { max } = getRateLimitConfig(pathname)
 
-  // Rate limiting for API routes
-  if (pathname.startsWith('/api/')) {
-    const key = getRateLimitKey(request)
-    const { limited, remaining } = isRateLimited(key)
+  if (max > 0) {
+    const key = `${request.nextUrl.hostname}:${extractClientIp(request)}:${pathname}`
+    const { limited, remaining, retryAfter } = isRateLimited(key, max)
 
     if (limited) {
       return new NextResponse(
@@ -51,23 +107,19 @@ export function middleware(request: NextRequest) {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'Retry-After': '60',
-            'X-RateLimit-Limit': String(RATE_LIMIT_MAX_REQUESTS),
+            'Retry-After': String(retryAfter),
+            'X-RateLimit-Limit': String(max),
             'X-RateLimit-Remaining': '0',
           },
         }
       )
     }
 
-    const response = NextResponse.next()
-    response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX_REQUESTS))
+    response.headers.set('X-RateLimit-Limit', String(max))
     response.headers.set('X-RateLimit-Remaining', String(remaining))
-    return response
   }
 
-  const response = NextResponse.next()
-
-  // Content Security Policy (stricter - unsafe-inline only for style due to Tailwind)
+  // Content Security Policy
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' https://www.youtube.com https://*.youtube.com",
@@ -81,12 +133,10 @@ export function middleware(request: NextRequest) {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'self'",
-    "upgrade-insecure-requests",
+    'upgrade-insecure-requests',
   ].join('; ')
 
   response.headers.set('Content-Security-Policy', csp)
-
-  // Additional security headers
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'SAMEORIGIN')
   response.headers.set('X-XSS-Protection', '0')

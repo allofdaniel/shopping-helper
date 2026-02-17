@@ -72,40 +72,102 @@ function validateParams(searchParams: URLSearchParams) {
 }
 
 // 전체 상품 캐시
+type StoreDataCache = {
+  products: ApiProduct[]
+  total: number
+  loadedAt: number
+  fingerprint: string
+}
+
+const storeDataCache: Record<string, StoreDataCache> = {}
+
 let allProductsCache: ApiProduct[] | null = null
+let allProductsFingerprint = ''
 let cacheLoadedAt = 0
 const CACHE_TTL = 5 * 60 * 1000
 
 // HTTP로 JSON 파일 로드 (Vercel 환경)
 async function loadProductsViaHttp(store: string, baseUrl: string): Promise<ApiProduct[]> {
+  const cached = storeDataCache[store]
+  const headers: Record<string, string> = {}
+
+  const cachedEtag = cached?.fingerprint?.startsWith('etag:')
+    ? cached.fingerprint.replace('etag:', '')
+    : undefined
+  if (cachedEtag) {
+    headers['If-None-Match'] = cachedEtag
+  }
+
   try {
     const response = await fetch(`${baseUrl}/data/${store}.json`, {
       cache: 'no-store',
+      headers,
     })
+
+    if (response.status === 304 && cached) {
+      return cached.products
+    }
 
     if (!response.ok) {
       console.error(`HTTP fetch failed for ${store}: ${response.status}`)
-      return []
+      return cached?.products || []
     }
 
     const data = await response.json()
-    return data.products || []
+    const etag = response.headers.get('etag')
+    const lastModified = response.headers.get('last-modified')
+    const contentLength = response.headers.get('content-length')
+    const fingerprint = `etag:${etag || ''}|lm:${lastModified || ''}|len:${contentLength || ''}`
+
+    const result = {
+      products: data.products || [],
+      total: data.total || data.products?.length || 0,
+      loadedAt: Date.now(),
+      fingerprint,
+    }
+
+    storeDataCache[store] = result
+    return result.products
   } catch (error) {
     console.error(`Failed to fetch ${store} via HTTP:`, error)
-    return []
+    return cached?.products || []
   }
 }
 
 // 파일 시스템으로 JSON 로드 (로컬 환경)
 async function loadProductsViaFs(store: string): Promise<ApiProduct[]> {
+  const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
+  let fingerprint = ''
   try {
-    const jsonPath = path.join(process.cwd(), 'public', 'data', `${store}.json`)
+    const stat = await fs.stat(jsonPath)
+    fingerprint = `fs:${stat.size}:${Math.floor(stat.mtimeMs)}`
+  } catch (error) {
+    const cached = storeDataCache[store]
+    console.error(`Failed to stat ${store}:`, error)
+    return cached?.products || []
+  }
+
+  const cached = storeDataCache[store]
+  if (cached && cached.fingerprint === fingerprint && Date.now() - cached.loadedAt < CACHE_TTL) {
+    return cached.products
+  }
+
+  try {
     const content = await fs.readFile(jsonPath, 'utf-8')
     const data = JSON.parse(content)
-    return data.products || []
+
+    const result = {
+      products: data.products || [],
+      total: data.total || data.products?.length || 0,
+      loadedAt: Date.now(),
+      fingerprint,
+    }
+
+    storeDataCache[store] = result
+    return result.products
   } catch (error) {
     console.error(`Failed to load ${store} via FS:`, error)
-    return []
+    return cached?.products || []
   }
 }
 
@@ -138,7 +200,10 @@ function deduplicateProducts(products: ApiProduct[]): ApiProduct[] {
 
 async function loadAllProducts(baseUrl?: string) {
   if (allProductsCache && Date.now() - cacheLoadedAt < CACHE_TTL) {
-    return allProductsCache
+    const cachedFingerprint = STORES.map(store => storeDataCache[store]?.fingerprint || 'missing').join('|')
+    if (allProductsFingerprint === cachedFingerprint) {
+      return allProductsCache
+    }
   }
 
   // 병렬 로드로 성능 최적화 (N+1 문제 해결)
@@ -171,6 +236,8 @@ async function loadAllProducts(baseUrl?: string) {
 
   allProductsCache = deduplicated
   cacheLoadedAt = Date.now()
+  const fingerprint = STORES.map(store => storeDataCache[store]?.fingerprint || 'missing').join('|')
+  allProductsFingerprint = fingerprint
   console.log(`[API] Loaded ${allProducts.length} products, after dedup: ${deduplicated.length} (Vercel: ${isVercel})`)
   return deduplicated
 }
