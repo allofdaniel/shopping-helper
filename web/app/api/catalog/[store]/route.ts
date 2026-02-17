@@ -58,10 +58,10 @@ function validateAndSanitizeParams(searchParams: URLSearchParams) {
   if (offset > MAX_OFFSET) offset = MAX_OFFSET
 
   const searchRaw = searchParams.get('search')
-  const search = sanitizeText(searchRaw?.toLowerCase(), MAX_SEARCH_LENGTH)
+  const search = sanitizeText(searchRaw?.toLowerCase() ?? null, MAX_SEARCH_LENGTH)
 
   const category = sanitizeText(
-    searchParams.get('category')?.toLowerCase(),
+    searchParams.get('category')?.toLowerCase() ?? null,
     MAX_CATEGORY_LENGTH
   )
 
